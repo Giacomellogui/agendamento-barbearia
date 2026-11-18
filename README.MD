@@ -9,6 +9,16 @@ ou cancelar reservas em um painel protegido por senha.
 - Verificação de conflitos antes de salvar a reserva.
 - Painel do barbeiro com login, consulta por data e cancelamento.
 
+## Capturas de tela
+
+### Agendamento
+
+![Página de agendamento da barbearia](docs/agendamento.png)
+
+### Painel do barbeiro
+
+![Painel do barbeiro com a lista de reservas](docs/painel.png)
+
 ## Tecnologias
 
 TypeScript, HTML, CSS, Node.js e SQLite.
