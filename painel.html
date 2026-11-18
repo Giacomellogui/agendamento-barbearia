@@ -7,18 +7,36 @@
     <link rel="stylesheet" href="/estilos.css" />
   </head>
   <body>
-    <main class="cartao">
+    <!-- Barra com o seletor de tema compartilhado com o agendamento. -->
+    <header class="barra">
+      <span class="marca">Barbearia</span>
+      <label class="seletor-tema" for="tema">Tema
+        <select id="tema">
+          <option value="claro">Claro</option>
+          <option value="escuro">Escuro</option>
+        </select>
+      </label>
+    </header>
+    <main class="cartao cartao-painel">
       <h1>Agenda da barbearia</h1>
-      <form action="/sair" method="post">
-        <button type="submit">Sair</button>
-      </form>
-      <p><a href="/">Abrir página de agendamento</a></p>
-      <label for="data">Consultar dia</label>
-      <input id="data" type="date" />
+      <!-- Ações para abrir o agendamento ou encerrar a sessão. -->
+      <div class="acoes-painel">
+        <a href="/">Abrir página de agendamento</a>
+        <form action="/sair" method="post">
+          <button class="botao-secundario" type="submit">Sair</button>
+        </form>
+      </div>
+      <div class="campos-formulario">
+        <label for="data">Consultar dia</label>
+        <input id="data" type="date" />
+      </div>
       <p id="mensagem" role="status"></p>
       <p id="situacao" role="status"></p>
+      <!-- O script preenche a lista com as reservas do dia selecionado. -->
       <ul id="reservas"></ul>
     </main>
+    <!-- Módulos gerados pela compilação do TypeScript. -->
+    <script type="module" src="/tema.js"></script>
     <script type="module" src="/painel.js"></script>
   </body>
 </html>

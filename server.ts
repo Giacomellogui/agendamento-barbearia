@@ -4,12 +4,15 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
+// As páginas e os arquivos compilados são carregados ao iniciar o servidor.
 const pagina = readFileSync(new URL("./index.html", import.meta.url));
 const estilos = readFileSync(new URL("./estilos.css", import.meta.url));
+const tema = readFileSync(new URL("./tema.js", import.meta.url));
 const agendamento = readFileSync(new URL("./agendamento.js", import.meta.url));
 const painel = readFileSync(new URL("./painel.html", import.meta.url));
 const scriptPainel = readFileSync(new URL("./painel.js", import.meta.url));
 const login = readFileSync(new URL("./login.html", import.meta.url));
+// A senha vem do ambiente. A sessão fica em memória e expira após oito horas.
 const senha = process.env.BARBEIRO_SENHA;
 const duracaoSessao = 8 * 60 * 60;
 let sessao: { token: string; expira: number } | undefined;
@@ -18,6 +21,7 @@ function hashSenha(valor: string) {
   return createHash("sha256").update(valor).digest();
 }
 
+// Confere se o cookie pertence à sessão ativa.
 function autenticado(req: IncomingMessage) {
   const cookie = req.headers.cookie?.split(";").map((item) => item.trim())
     .find((item) => item.startsWith("sessao_barbearia="));
@@ -35,12 +39,14 @@ type Servico = {
   duracaoMinutos: number;
 };
 
+// Catálogo usado no formulário e nos cálculos de disponibilidade.
 const servicos: Servico[] = [
   { id: 1, nome: "Corte de cabelo", duracaoMinutos: 30 },
   { id: 2, nome: "Barba", duracaoMinutos: 20 },
   { id: 3, nome: "Corte e barba", duracaoMinutos: 50 },
 ];
 
+// Abre o banco local e cria a tabela na primeira execução.
 const banco = new DatabaseSync(fileURLToPath(new URL("./agenda.sqlite", import.meta.url)));
 banco.exec(`
   CREATE TABLE IF NOT EXISTS reservas (
@@ -53,9 +59,11 @@ banco.exec(`
   )
 `);
 
+// Há sobreposição quando cada intervalo começa antes do fim do outro.
 const conflitos = banco.prepare(`
   SELECT 1 FROM reservas WHERE data = ? AND inicio < ? AND fim > ?
 `);
+// Confere conflitos e insere a reserva na mesma instrução SQL.
 const inserirReserva = banco.prepare(`
   INSERT INTO reservas (nome, servico_id, data, inicio, fim)
   SELECT ?, ?, ?, ?, ?
@@ -74,6 +82,7 @@ function responderJson(res: ServerResponse, status: number, dados: unknown) {
   res.end(JSON.stringify(dados));
 }
 
+// Valida a data e calcula os horários em que o serviço inteiro cabe no expediente.
 function horariosPossiveis(data: unknown, duracao: number) {
   if (typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return [];
   const dia = new Date(`${data}T00:00:00Z`);
@@ -83,6 +92,7 @@ function horariosPossiveis(data: unknown, duracao: number) {
   const hoje = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
   if (data < hoje) return [];
 
+  // Os horários são calculados em minutos desde a meia-noite.
   const horarios = [];
   const minutoAtual = agora.getHours() * 60 + agora.getMinutes();
   for (let inicio = 9 * 60; inicio + duracao <= 18 * 60; inicio += 30) {
@@ -94,6 +104,7 @@ function horariosPossiveis(data: unknown, duracao: number) {
   return horarios;
 }
 
+// Lê o corpo da requisição em partes e limita os dados mantidos em memória.
 async function lerCorpo(req: IncomingMessage) {
   const partes: Buffer[] = [];
   let tamanho = 0;
@@ -105,8 +116,10 @@ async function lerCorpo(req: IncomingMessage) {
   return Buffer.concat(partes).toString("utf8");
 }
 
+// Cada rota combina o método HTTP com o caminho pedido pelo navegador.
 const servidor = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  // Exibe o login e cria uma sessão quando a senha confere.
   if (url.pathname === "/login" && req.method === "GET") {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
     res.end(login);
@@ -128,12 +141,14 @@ const servidor = createServer(async (req, res) => {
     redirecionar(res, "/painel");
     return;
   }
+  // Encerra a sessão e remove o cookie do navegador.
   if (url.pathname === "/sair" && req.method === "POST") {
     if (autenticado(req)) sessao = undefined;
     res.setHeader("Set-Cookie", "sessao_barbearia=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
     redirecionar(res, "/login");
     return;
   }
+  // Entrega a página de agendamento e os arquivos usados pelo navegador.
   if (req.method === "GET" && url.pathname === "/") {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.end(pagina);
@@ -149,6 +164,11 @@ const servidor = createServer(async (req, res) => {
     res.end(agendamento);
     return;
   }
+  if (req.method === "GET" && url.pathname === "/tema.js") {
+    res.setHeader("Content-Type", "text/javascript; charset=utf-8");
+    res.end(tema);
+    return;
+  }
   if (req.method === "GET" && url.pathname === "/painel.js") {
     res.setHeader("Content-Type", "text/javascript; charset=utf-8");
     res.end(scriptPainel);
@@ -158,6 +178,7 @@ const servidor = createServer(async (req, res) => {
     responderJson(res, 200, servicos);
     return;
   }
+  // Protege a página do painel e as operações de consulta e cancelamento.
   if (req.method === "GET" && url.pathname === "/painel") {
     if (!autenticado(req)) {
       redirecionar(res, "/login");
@@ -197,6 +218,7 @@ const servidor = createServer(async (req, res) => {
     });
     return;
   }
+  // Filtra os horários que se sobrepõem a reservas existentes.
   if (req.method === "GET" && url.pathname === "/horarios") {
     const data = url.searchParams.get("data");
     const servico = servicos.find(({ id }) => String(id) === url.searchParams.get("servicoId"));
@@ -210,6 +232,7 @@ const servidor = createServer(async (req, res) => {
     responderJson(res, 200, horarios);
     return;
   }
+  // Valida os dados no servidor e tenta salvar o agendamento.
   if (req.method === "POST" && url.pathname === "/agendamentos") {
     const reserva = await lerCorpo(req).then((corpo) => JSON.parse(corpo ?? "null")).catch(() => null);
     const nome = typeof reserva?.nome === "string" ? reserva.nome.trim() : "";
@@ -237,6 +260,7 @@ const servidor = createServer(async (req, res) => {
   res.end("Rota desconhecida");
 });
 
+// Escuta apenas no endereço local deste computador.
 servidor.listen(3000, "127.0.0.1", () => {
   console.log("Servidor rodando em http://127.0.0.1:3000");
 });

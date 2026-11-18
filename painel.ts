@@ -1,5 +1,6 @@
 export {};
 
+// Dados de uma reserva retornada pela API do painel.
 type Reserva = {
   id: number;
   nome: string;
@@ -8,6 +9,7 @@ type Reserva = {
   fim: number;
 };
 
+// Controles do painel. A primeira consulta usa a data local de hoje.
 const data = document.querySelector<HTMLInputElement>("#data")!;
 const mensagem = document.querySelector<HTMLParagraphElement>("#mensagem")!;
 const situacao = document.querySelector<HTMLParagraphElement>("#situacao")!;
@@ -15,9 +17,11 @@ const lista = document.querySelector<HTMLUListElement>("#reservas")!;
 const hoje = new Date();
 const doisDigitos = (valor: number) => String(valor).padStart(2, "0");
 data.value = `${hoje.getFullYear()}-${doisDigitos(hoje.getMonth() + 1)}-${doisDigitos(hoje.getDate())}`;
+// Converte minutos desde a meia-noite em um horário no formato HH:MM.
 const formatarHora = (minutos: number) =>
   `${doisDigitos(Math.floor(minutos / 60))}:${doisDigitos(minutos % 60)}`;
 
+// Pede confirmação, cancela a reserva e consulta a agenda novamente.
 async function cancelar(reserva: Reserva, botao: HTMLButtonElement) {
   if (!window.confirm(`Cancelar o agendamento de ${reserva.nome} às ${formatarHora(reserva.inicio)}?`)) return;
   botao.disabled = true;
@@ -37,6 +41,7 @@ async function cancelar(reserva: Reserva, botao: HTMLButtonElement) {
   }
 }
 
+// Cancela a busca anterior para evitar exibir reservas de outra data.
 let consulta: AbortController | undefined;
 async function carregarAgenda() {
   consulta?.abort();
@@ -59,6 +64,7 @@ async function carregarAgenda() {
     const reservas: Reserva[] = await resposta.json();
     if (pedido.signal.aborted) return;
     situacao.textContent = reservas.length ? "" : "Nenhum agendamento para este dia.";
+    // Cria os elementos da lista com os dados retornados pelo servidor.
     for (const reserva of reservas) {
       const item = document.createElement("li");
       const botao = document.createElement("button");

@@ -1,20 +1,85 @@
+﻿:root {
+  /* Cada variável usa uma cor para o tema claro e outra para o escuro. */
+  color-scheme: light dark;
+  --fundo: light-dark(#f2eae1, #171310);
+  --cartao: light-dark(#fffaf5, #251e19);
+  --campo: light-dark(#fffdfb, #302620);
+  --texto: light-dark(#2e211a, #f6e9dc);
+  --suave: light-dark(#695447, #c7b1a1);
+  --borda: light-dark(#aa8f7e, #846b5b);
+  --linha: light-dark(#e9dacf, #503e33);
+  --destaque: light-dark(#8b4127, #f0aa84);
+  --destaque-hover: light-dark(#6e2d18, #ffc6a7);
+  --texto-botao: light-dark(#fffaf5, #2c180e);
+  --desativado: light-dark(#ede4dc, #3d3028);
+  --sombra: light-dark(#6f3e2319, #0005);
+}
+
+/* A escolha explícita também define a aparência dos controles nativos. */
+:root[data-tema="claro"] { color-scheme: light; }
+:root[data-tema="escuro"] { color-scheme: dark; }
+
 body {
   margin: 0;
-  padding: 24px 16px;
-  background: #f4f1ec;
-  color: #27211c;
-  font-family: system-ui, sans-serif;
+  min-height: 100vh;
+  padding: 20px 16px 48px;
+  box-sizing: border-box;
+  color: var(--texto);
+  background: radial-gradient(ellipse at top, var(--linha), transparent 560px), var(--fundo);
+  font: 1rem/1.5 system-ui, sans-serif;
+}
+
+/* A barra e os cartões limitam a largura das telas maiores. */
+.barra,
+.cartao {
+  box-sizing: border-box;
+  max-width: 34rem;
+  margin-inline: auto;
+}
+
+.barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.marca {
+  font: 700 1.3rem Georgia, serif;
+  letter-spacing: 0.02em;
+}
+
+.seletor-tema {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--suave);
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .cartao {
-  box-sizing: border-box;
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 24px;
-  background: white;
-  border-radius: 16px;
+  padding: clamp(20px, 5vw, 36px);
+  border: 1px solid var(--linha);
+  border-top: 4px solid var(--destaque);
+  border-radius: 20px;
+  background: var(--cartao);
+  box-shadow: 0 14px 40px var(--sombra);
 }
 
+.cartao-painel { max-width: 42rem; }
+
+h1 {
+  margin: 0 0 24px;
+  font: 700 clamp(1.9rem, 6vw, 2.65rem)/1.1 Georgia, serif;
+}
+
+a { color: var(--destaque); }
+a:hover { color: var(--destaque-hover); }
+
+/* Regras compartilhadas pelos campos de agendamento, login e painel. */
 .campos-formulario {
   min-width: 0;
   margin: 0;
@@ -22,84 +87,118 @@ body {
   border: 0;
 }
 
+.campos-formulario p { margin: 16px 0; }
+
 .campos-formulario label {
   display: block;
   margin-bottom: 6px;
-  font-weight: 600;
+  font-weight: 650;
+}
+
+.campos-formulario input,
+.campos-formulario select,
+.seletor-tema select,
+.botao-secundario,
+#reservas button {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--borda);
+  border-radius: 9px;
+  background: var(--campo);
+  color: var(--texto);
+  font: inherit;
 }
 
 .campos-formulario input,
 .campos-formulario select {
-  box-sizing: border-box;
   width: 100%;
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 1px solid #b8aea4;
-  border-radius: 8px;
-  font: inherit;
+  min-width: 0;
 }
 
+.campos-formulario select:disabled {
+  background: var(--desativado);
+  color: var(--suave);
+}
+
+/* Aparência do botão principal e seus estados de interação. */
 .botao-principal {
   width: 100%;
-  min-height: 44px;
+  min-height: 46px;
   padding: 10px 16px;
   border: 0;
-  border-radius: 8px;
-  background: #67452c;
-  color: white;
+  border-radius: 9px;
+  background: var(--destaque);
+  color: var(--texto-botao);
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
 }
 
-.botao-principal:enabled {
-  cursor: pointer;
-}
-
-.botao-principal:enabled:hover {
-  background: #503421;
-}
+button:enabled { cursor: pointer; }
+.botao-principal:enabled:hover { background: var(--destaque-hover); }
+.botao-secundario:enabled:hover,
+#reservas button:enabled:hover { background: var(--desativado); }
 
 .botao-principal:disabled {
-  background: #e5ded7;
-  color: #625a52;
+  background: var(--desativado);
+  color: var(--suave);
 }
 
-.botao-principal:focus-visible {
-  outline: 2px solid #67452c;
+/* Destaca o controle em foco ao navegar com o teclado. */
+:focus-visible {
+  outline: 2px solid var(--destaque);
   outline-offset: 3px;
+}
+
+/* Organiza as ações e os itens de reserva do painel. */
+.acoes-painel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 22px;
 }
 
 #reservas {
   display: grid;
-  gap: 12px;
+  gap: 10px;
+  margin: 16px 0 0;
   padding: 0;
   list-style: none;
 }
 
 #reservas li {
-  padding: 12px;
-  border: 1px solid #ded5cc;
-  border-radius: 8px;
+  padding: 14px;
+  border: 1px solid var(--linha);
+  border-radius: 10px;
+  background: var(--campo);
   overflow-wrap: anywhere;
 }
 
-#reservas li button {
+#reservas button {
   display: block;
   margin-top: 8px;
-  min-height: 44px;
+  color: var(--destaque);
 }
+
+/* Estilos dos avisos e das mensagens de sucesso e erro. */
+#situacao { color: var(--suave); }
+#mensagem:empty,
+#situacao:empty,
+#reservas:empty { margin: 0; }
 
 #mensagem[data-estado] {
   padding: 12px;
-  border-radius: 8px;
+  border-radius: 9px;
 }
 
 #mensagem[data-estado="sucesso"] {
-  background: #e5f4e9;
-  color: #195b32;
+  background: light-dark(#e5f4e9, #1b392a);
+  color: light-dark(#195b32, #b5ebc8);
 }
 
 #mensagem[data-estado="erro"] {
-  background: #fdeaea;
-  color: #8f2525;
+  background: light-dark(#fdeaea, #482623);
+  color: light-dark(#8f2525, #ffd0cc);
 }

@@ -9,6 +9,7 @@
   <body>
     <main class="cartao">
       <h1>Entrar na agenda da barbearia</h1>
+      <!-- Envia a senha ao servidor para abrir uma sessão. -->
       <form action="/login" method="post" class="campos-formulario">
         <p>
           <label for="senha">Senha do barbeiro</label>
@@ -20,6 +21,7 @@
       <p><a href="/">Abrir página de agendamento</a></p>
     </main>
     <script>
+      // O parâmetro da URL indica qual mensagem de erro deve aparecer.
       const erro = new URLSearchParams(location.search).get("erro");
       const mensagem = document.querySelector("#mensagem");
       if (erro === "senha") mensagem.textContent = "Senha incorreta. Tente novamente.";

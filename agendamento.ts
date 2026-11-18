@@ -1,8 +1,10 @@
+// O calendário usa a data local do navegador.
 const hoje = new Date();
 const ano = hoje.getFullYear();
 const mes = String(hoje.getMonth() + 1).padStart(2, "0");
 const dia = String(hoje.getDate()).padStart(2, "0");
 
+// Referências aos controles do formulário e à área de mensagens.
 const campoData = obterElemento("data", HTMLInputElement);
 const menuServico = obterElemento("servico", HTMLSelectElement);
 const menuHorario = obterElemento("horario", HTMLSelectElement);
@@ -14,6 +16,7 @@ const mensagem = obterElemento("mensagem", HTMLParagraphElement);
 const dataHoje = `${ano}-${mes}-${dia}`;
 campoData.min = dataHoje;
 
+// Cancela a consulta anterior quando o serviço ou a data muda.
 let consulta: AbortController | undefined;
 async function atualizarHorarios() {
   consulta?.abort();
@@ -54,15 +57,18 @@ async function atualizarHorarios() {
   }
 }
 
+// Atualiza os horários quando o serviço ou a data muda.
 menuServico.addEventListener("change", atualizarHorarios);
 campoData.addEventListener("change", atualizarHorarios);
 menuHorario.addEventListener("change", () => {
   confirmar.disabled = !menuHorario.value;
 });
 
+// Envia a reserva sem recarregar a página e mostra o retorno do servidor.
 formulario.addEventListener("submit", async (evento) => {
   evento.preventDefault();
   if (!menuHorario.value) return;
+  // Mantém os campos bloqueados até a API responder.
   campos.disabled = true;
   delete mensagem.dataset.estado;
   mensagem.textContent = "Confirmando agendamento...";
@@ -86,6 +92,7 @@ formulario.addEventListener("submit", async (evento) => {
       ? `Agendamento confirmado: ${servicoEscolhido}, dia ${dataFormatada} às ${menuHorario.value}.`
       : resultado.mensagem;
     if (resposta.ok) campoNome.value = "";
+    // Recarrega os horários após a confirmação ou quando a API aponta um conflito.
     if (resposta.ok || resposta.status === 409) await atualizarHorarios();
   } catch {
     mensagem.dataset.estado = "erro";
@@ -95,6 +102,7 @@ formulario.addEventListener("submit", async (evento) => {
   }
 });
 
+// Busca o catálogo e transforma cada serviço em uma opção do menu.
 async function carregarServicos() {
   const resposta = await fetch("/servicos");
 
@@ -117,6 +125,7 @@ carregarServicos().catch(() => {
 });
 export {};
 
+// Formato dos dados que o formulário recebe da API.
 type Servico = {
   id: number;
   nome: string;
@@ -127,6 +136,7 @@ type RespostaAgendamento = {
   mensagem: string;
 };
 
+// Confere se o HTML contém o elemento esperado e se ele tem o tipo correto.
 function obterElemento<T extends HTMLElement>(
   id: string,
   tipo: new () => T,

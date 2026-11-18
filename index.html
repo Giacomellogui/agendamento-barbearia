@@ -7,9 +7,20 @@
     <link rel="stylesheet" href="/estilos.css" />
   </head>
   <body>
+    <!-- Barra com o seletor de tema compartilhado com o painel. -->
+    <header class="barra">
+      <span class="marca">Barbearia</span>
+      <label class="seletor-tema" for="tema">Tema
+        <select id="tema">
+          <option value="claro">Claro</option>
+          <option value="escuro">Escuro</option>
+        </select>
+      </label>
+    </header>
     <main class="cartao">
       <h1>Agende seu horário</h1>
 
+      <!-- Os IDs conectam os campos do formulário ao TypeScript. -->
       <form id="agendamento">
         <fieldset id="campos" class="campos-formulario">
           <label for="servico">Escolha um serviço</label>
@@ -35,8 +46,11 @@
           </button>
         </fieldset>
       </form>
+      <!-- Área de feedback da confirmação da reserva. -->
       <p id="mensagem" role="status"></p>
     </main>
+    <!-- Módulos gerados pela compilação do TypeScript. -->
+    <script type="module" src="/tema.js"></script>
     <script type="module" src="/agendamento.js"></script>
   </body>
 </html>

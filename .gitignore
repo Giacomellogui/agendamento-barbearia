@@ -1,5 +1,10 @@
+# Dependências instaladas localmente.
 node_modules/
+# Banco de reservas e arquivos auxiliares do SQLite.
 agenda.sqlite*
+# Configuração local que pode conter segredos.
 .env
+# JavaScript gerado pelo compilador TypeScript.
 /agendamento.js
 /painel.js
+/tema.js

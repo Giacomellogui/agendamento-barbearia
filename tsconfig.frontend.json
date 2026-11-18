@@ -7,5 +7,5 @@
     "noEmitOnError": true,
     "types": []
   },
-  "files": ["agendamento.ts", "painel.ts"]
+  "files": ["agendamento.ts", "painel.ts", "tema.ts"]
 }
