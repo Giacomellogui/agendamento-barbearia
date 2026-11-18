@@ -69,8 +69,6 @@ body {
   box-shadow: 0 14px 40px var(--sombra);
 }
 
-.cartao-painel { max-width: 42rem; }
-
 h1 {
   margin: 0 0 24px;
   font: 700 clamp(1.9rem, 6vw, 2.65rem)/1.1 Georgia, serif;
@@ -160,6 +158,8 @@ button:enabled { cursor: pointer; }
   margin-bottom: 22px;
 }
 
+.acoes-painel[hidden] { display: none; }
+
 #reservas {
   display: grid;
   gap: 10px;
@@ -201,4 +201,603 @@ button:enabled { cursor: pointer; }
 #mensagem[data-estado="erro"] {
   background: light-dark(#fdeaea, #482623);
   color: light-dark(#8f2525, #ffd0cc);
+}
+
+.configuracao-painel {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--linha);
+  border-radius: 10px;
+}
+
+.configuracao-painel summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.configuracao-painel fieldset {
+  min-width: 0;
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.dias-expediente,
+.horas-expediente {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+
+.dias-expediente label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.dias-expediente input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+  accent-color: var(--destaque);
+}
+
+.configuracao-painel [role="status"]:empty { margin: 0; }
+.configuracao-painel [data-estado="erro"] { color: light-dark(#8f2525, #ffd0cc); }
+
+/* Área do cliente com paleta própria e uma capa compartilhada. */
+.pagina-cliente {
+  color-scheme: dark;
+  --fundo: light-dark(#eee9e0, #100f0e);
+  --cartao: light-dark(#fffdf8, #191817);
+  --campo: light-dark(#f8f4ed, #252321);
+  --texto: light-dark(#241d16, #f9f4ea);
+  --suave: light-dark(#655848, #c9bfb1);
+  --borda: light-dark(#a79884, #766c5d);
+  --linha: light-dark(#ddd3c3, #3b352e);
+  --destaque: light-dark(#76500d, #f3cb7d);
+  --destaque-hover: light-dark(#5c3c05, #ffe0a4);
+  --texto-botao: light-dark(#fffaf0, #241808);
+  --desativado: light-dark(#ece5d9, #302c26);
+  --sombra: light-dark(#37240e21, #0007);
+  padding: 20px 14px 36px;
+  background: var(--fundo);
+}
+
+:root[data-tema="claro"] .pagina-cliente { color-scheme: light; }
+
+.pagina-cliente .barra,
+.cliente-cartao {
+  max-width: 29rem;
+}
+
+.pagina-cliente .barra {
+  margin-bottom: 12px;
+  padding-inline: 4px;
+}
+
+.cliente-cartao {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--linha);
+  border-radius: 22px;
+}
+
+.cliente-capa {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  min-height: clamp(11rem, 48vw, 15rem);
+  box-sizing: border-box;
+  padding: 26px 22px 22px;
+  background: linear-gradient(180deg, #14121018 10%, #141210d9 76%, #141210),
+    #141210 url("/assets/barbearia.png") center 48% / cover;
+  color: #fff7ea;
+}
+
+.cliente-capa .marca {
+  margin: 0 0 10px;
+  color: #f5d391;
+}
+
+.cliente-capa h1 {
+  margin: 0;
+  font-size: clamp(1.85rem, 6.6vw, 2.6rem);
+  text-wrap: balance;
+}
+
+.cliente-capa h1 span { color: #f5d391; }
+
+.cliente-conteudo {
+  padding: clamp(18px, 5vw, 28px);
+}
+
+.cliente-conteudo .acoes-painel {
+  margin-bottom: 20px;
+  color: var(--suave);
+  overflow-wrap: anywhere;
+}
+
+.cliente-conteudo .acoes-painel > * { min-width: 0; }
+
+.cliente-conteudo .campos-formulario label { font-size: 0.9rem; }
+
+.cliente-conteudo .campos-formulario input,
+.cliente-conteudo .campos-formulario select,
+.cliente-conteudo .botao-principal {
+  min-height: 48px;
+}
+
+.cliente-conteudo > p:last-child { margin-bottom: 0; }
+
+/* Agenda do cliente em uma coluna, com opções de toque e calendário visível. */
+.pagina-agenda {
+  --altura-navegacao: calc(64px + env(safe-area-inset-bottom, 0px));
+  --fundo: light-dark(#f4f1e9, #10100f);
+  --cartao: light-dark(#fffdf7, #191918);
+  --campo: light-dark(#f4f0e7, #20201e);
+  --linha: light-dark(#e2dbce, #33312d);
+  --destaque: light-dark(#785211, #edc761);
+  --destaque-hover: light-dark(#62430c, #ffdc7e);
+  padding-bottom: calc(var(--altura-navegacao) + 20px);
+}
+
+.pagina-agenda .barra,
+.agenda-cliente {
+  max-width: 33rem;
+  margin-inline: auto;
+}
+
+.pagina-agenda .barra {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--linha);
+}
+
+.pagina-agenda .marca { color: var(--destaque); }
+
+.agenda-cliente h1 {
+  margin: 20px 0 12px;
+  font: 750 clamp(1.55rem, 6vw, 2.25rem)/1.15 system-ui, sans-serif;
+}
+
+.agenda-cliente .acoes-painel {
+  margin-bottom: 18px;
+  color: var(--suave);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.conta-cliente {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+  background: var(--cartao);
+}
+
+.conta-cliente[hidden] { display: none; }
+
+.conta-identidade {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.conta-avatar {
+  display: grid;
+  flex: 0 0 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--destaque);
+  border-radius: 50%;
+  background: var(--campo);
+  color: var(--destaque);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.conta-dados { min-width: 0; }
+.conta-dados span,
+.conta-dados strong { display: block; }
+.conta-dados span { color: var(--suave); font-size: 0.75rem; }
+.conta-dados strong { overflow-wrap: anywhere; font-size: 0.95rem; }
+.conta-cliente .botao-secundario { font-size: 0.85rem; }
+
+.agenda-campos,
+.agenda-grupo {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.agenda-grupo + section,
+.agenda-campos section + .agenda-grupo { margin-top: 22px; }
+
+.agenda-grupo legend,
+.agenda-campos h2 {
+  margin: 0 0 8px;
+  padding: 0;
+  color: var(--suave);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.texto-acessivel,
+.agenda-campos input[type="radio"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.agenda-servicos,
+.agenda-horarios { display: grid; gap: 8px; }
+
+.agenda-servicos {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+}
+
+.agenda-servicos label,
+.agenda-horarios label { position: relative; }
+
+.agenda-servicos label > span,
+.agenda-horarios label > span {
+  box-sizing: border-box;
+  display: grid;
+  min-height: 44px;
+  height: 100%;
+  padding: 8px;
+  border: 1px solid var(--linha);
+  border-radius: 9px;
+  background: var(--campo);
+  text-align: center;
+  align-content: center;
+  cursor: pointer;
+}
+
+.agenda-servicos strong { overflow-wrap: anywhere; }
+.agenda-servicos small { color: var(--suave); }
+
+.agenda-campos input:checked + span {
+  border-color: var(--destaque);
+  color: var(--destaque);
+}
+
+.agenda-campos input:focus-visible + span {
+  outline: 2px solid var(--destaque);
+  outline-offset: 2px;
+}
+
+.agenda-calendario {
+  padding: 8px;
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  background: var(--cartao);
+}
+
+.agenda-mes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--linha);
+}
+
+.agenda-mes p { margin: 0; font-weight: 700; text-transform: capitalize; }
+
+.agenda-mes button,
+.agenda-dias button {
+  min-width: 0;
+  min-height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  color: var(--texto);
+  background: transparent;
+  font: inherit;
+  font-weight: 650;
+}
+
+.agenda-mes button { width: 44px; font-size: 1.4rem; }
+
+.agenda-mes button:disabled,
+.agenda-dias button:disabled { opacity: 0.45; }
+
+.agenda-mes button:enabled:hover,
+.agenda-dias button:enabled:hover { background: var(--campo); }
+
+.agenda-semana,
+.agenda-dias {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  text-align: center;
+}
+
+.agenda-semana {
+  padding: 6px 0;
+  color: var(--suave);
+  font-size: 0.75rem;
+}
+
+.agenda-dias [aria-current="date"] { color: var(--destaque); }
+.agenda-dias button[aria-pressed="true"] {
+  background: var(--destaque);
+  color: var(--texto-botao);
+}
+
+.agenda-horarios { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.agenda-horarios label > span { font-size: 0.9rem; font-weight: 700; }
+#situacao-horarios { margin: 0 0 6px; color: var(--suave); font-size: 0.9rem; }
+#situacao-horarios:empty { margin: 0; }
+
+.agenda-rodape {
+  position: sticky;
+  bottom: var(--altura-navegacao);
+  padding: 10px 0;
+  margin-top: 12px;
+  background: var(--fundo);
+}
+
+.agenda-navegacao {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 2;
+  box-sizing: border-box;
+  height: var(--altura-navegacao);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-top: 1px solid var(--linha);
+  background: var(--fundo);
+}
+
+.agenda-navegacao-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 33rem;
+  height: 100%;
+  margin-inline: auto;
+}
+
+.agenda-navegacao a {
+  display: grid;
+  min-height: 44px;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  color: var(--suave);
+  text-align: center;
+  text-decoration: none;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.agenda-navegacao a:hover,
+.agenda-navegacao a[aria-current="page"] { color: var(--destaque); }
+.agenda-navegacao a:focus-visible { outline-offset: -4px; }
+
+.agenda-icone {
+  box-sizing: border-box;
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.agenda-icone-inicio {
+  background: currentColor;
+  clip-path: polygon(50% 4%, 98% 44%, 88% 56%, 81% 50%, 81% 95%, 59% 95%, 59% 68%, 41% 68%, 41% 95%, 19% 95%, 19% 50%, 12% 56%, 2% 44%);
+}
+
+.agenda-icone-calendario {
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  background: linear-gradient(currentColor, currentColor) center 4px / 100% 1px no-repeat,
+    radial-gradient(circle, currentColor 1px, transparent 1.5px) 1px 5px / 5px 5px;
+}
+
+.agenda-historico {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda-historico li {
+  padding: 14px;
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+  background: var(--cartao);
+  overflow-wrap: anywhere;
+}
+
+.agenda-historico p {
+  margin: 4px 0 10px;
+  color: var(--suave);
+}
+
+.agenda-status {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--campo);
+  color: var(--suave);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.agenda-status[data-estado="Agendado"] { color: var(--destaque); }
+.agenda-status[data-estado="Cancelado"] { color: light-dark(#8f2525, #ffd0cc); }
+#situacao-historico:empty { margin: 0; }
+
+/* Painel administrativo com agenda e configurações lado a lado. */
+.pagina-barbeiro {
+  --fundo: light-dark(#f5f2eb, #10100f);
+  --cartao: light-dark(#fffdf8, #191918);
+  --campo: light-dark(#f8f4ec, #222220);
+  --texto: light-dark(#292219, #f7f1e7);
+  --suave: light-dark(#665949, #c7bbad);
+  --borda: light-dark(#a59681, #746858);
+  --linha: light-dark(#e5dccd, #39342e);
+  --destaque: light-dark(#775313, #edc761);
+  --destaque-hover: light-dark(#5c3d09, #ffdc7e);
+  --texto-botao: light-dark(#fffaf0, #251806);
+  --desativado: light-dark(#eee7da, #302c26);
+  background: var(--fundo);
+}
+
+.barra-barbeiro,
+.painel-barbeiro { max-width: 66rem; margin-inline: auto; }
+
+.barra-barbeiro {
+  margin-bottom: clamp(24px, 5vw, 44px);
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--linha);
+}
+
+.barra-barbeiro .marca { color: var(--destaque); }
+
+.barra-barbeiro-acoes,
+.painel-cabecalho,
+.painel-agenda-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.painel-cabecalho { margin-bottom: 20px; }
+.painel-cabecalho h1 { margin: 0; }
+.painel-cabecalho a { font-weight: 700; text-underline-offset: 4px; }
+
+.painel-colunas {
+  display: grid;
+  align-items: start;
+  gap: 16px;
+}
+
+@media (min-width: 52rem) {
+  .painel-colunas { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); }
+}
+
+.painel-bloco {
+  min-width: 0;
+  padding: clamp(16px, 3vw, 24px);
+  border: 1px solid var(--linha);
+  border-radius: 16px;
+  background: var(--cartao);
+}
+
+.painel-bloco h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  line-height: 1.25;
+}
+
+.painel-agenda-cabecalho {
+  align-items: end;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--linha);
+}
+
+#total-reservas { color: var(--suave); font-size: 0.875rem; margin: 4px 0 0; }
+#total-reservas:empty { margin: 0; }
+
+.painel-agenda #reservas li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 8px 12px;
+}
+
+.painel-reserva-horario {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--desativado);
+  color: var(--destaque);
+  font-size: 0.83rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.painel-reserva-dados { min-width: 0; }
+.painel-reserva-dados p { margin: 2px 0; color: var(--suave); }
+.painel-reserva-dados div { color: var(--suave); font-size: 0.85rem; }
+.painel-agenda #reservas button { margin: 0; font-size: 0.875rem; }
+
+.painel-configuracoes .configuracao-painel {
+  padding: 0 12px;
+  background: var(--campo);
+}
+
+.painel-configuracoes summary { padding-block: 12px; }
+.painel-configuracoes details[open] summary { border-bottom: 1px solid var(--linha); }
+.painel-configuracoes .campos-formulario { padding-bottom: 12px; }
+
+/* Login administrativo com uma capa compacta no celular. */
+.pagina-login-barbeiro {
+  display: grid;
+  align-items: center;
+  padding: 24px 16px;
+}
+
+.login-barbeiro {
+  display: grid;
+  width: min(100%, 32rem);
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid var(--linha);
+  border-radius: 20px;
+  background: var(--cartao);
+  box-shadow: 0 24px 60px var(--sombra);
+}
+
+.login-barbeiro-capa {
+  min-height: clamp(8rem, 36vw, 12rem);
+  background: linear-gradient(180deg, #18120c12, #18120c72),
+    #191918 url("/assets/barbearia.png") center 52% / cover;
+}
+
+.login-barbeiro-conteudo { padding: clamp(24px, 5vw, 48px); }
+
+.login-barbeiro h1 {
+  margin-bottom: 28px;
+  font-size: clamp(1.9rem, 6vw, 2.65rem);
+}
+
+.login-barbeiro .campos-formulario input,
+.login-barbeiro .botao-principal { min-height: 48px; }
+
+.login-barbeiro-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-underline-offset: 4px;
+}
+
+@media (min-width: 48rem) {
+  .login-barbeiro {
+    width: min(100%, 54rem);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  }
+
+  .login-barbeiro-conteudo { align-self: center; }
 }

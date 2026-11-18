@@ -6,34 +6,88 @@
     <title>Agenda da barbearia</title>
     <link rel="stylesheet" href="/estilos.css" />
   </head>
-  <body>
+  <body class="pagina-barbeiro">
     <!-- Barra com o seletor de tema compartilhado com o agendamento. -->
-    <header class="barra">
+    <header class="barra barra-barbeiro">
       <span class="marca">Barbearia</span>
-      <label class="seletor-tema" for="tema">Tema
-        <select id="tema">
-          <option value="claro">Claro</option>
-          <option value="escuro">Escuro</option>
-        </select>
-      </label>
-    </header>
-    <main class="cartao cartao-painel">
-      <h1>Agenda da barbearia</h1>
-      <!-- Ações para abrir o agendamento ou encerrar a sessão. -->
-      <div class="acoes-painel">
-        <a href="/">Abrir página de agendamento</a>
+      <div class="barra-barbeiro-acoes">
+        <label class="seletor-tema" for="tema">Tema
+          <select id="tema">
+            <option value="claro">Claro</option>
+            <option value="escuro">Escuro</option>
+          </select>
+        </label>
         <form action="/sair" method="post">
           <button class="botao-secundario" type="submit">Sair</button>
         </form>
       </div>
-      <div class="campos-formulario">
-        <label for="data">Consultar dia</label>
-        <input id="data" type="date" />
+    </header>
+    <main class="painel-barbeiro">
+      <div class="painel-cabecalho">
+        <h1>Painel do barbeiro</h1>
+        <a href="/">Área do cliente <span aria-hidden="true">↗</span></a>
       </div>
-      <p id="mensagem" role="status"></p>
-      <p id="situacao" role="status"></p>
-      <!-- O script preenche a lista com as reservas do dia selecionado. -->
-      <ul id="reservas"></ul>
+      <div class="painel-colunas">
+        <section class="painel-bloco painel-agenda" aria-labelledby="titulo-agenda">
+          <div class="painel-agenda-cabecalho">
+            <div>
+              <h2 id="titulo-agenda">Agenda do dia</h2>
+              <p id="total-reservas" aria-live="polite"></p>
+            </div>
+            <div class="campos-formulario">
+              <label for="data">Consultar dia</label>
+              <input id="data" type="date" />
+            </div>
+          </div>
+          <p id="mensagem" role="status"></p>
+          <p id="situacao" role="status"></p>
+          <!-- O script preenche a lista com as reservas do dia selecionado. -->
+          <ul id="reservas"></ul>
+        </section>
+        <section class="painel-bloco painel-configuracoes" aria-labelledby="titulo-configuracoes">
+          <h2 id="titulo-configuracoes">Configurações</h2>
+          <details class="configuracao-painel">
+            <summary>Expediente</summary>
+            <form id="form-expediente" class="campos-formulario">
+              <fieldset disabled>
+                <legend>Dias de atendimento</legend>
+                <div class="dias-expediente">
+                  <label><input type="checkbox" name="dia" value="0" /> Domingo</label>
+                  <label><input type="checkbox" name="dia" value="1" /> Segunda</label>
+                  <label><input type="checkbox" name="dia" value="2" /> Terça</label>
+                  <label><input type="checkbox" name="dia" value="3" /> Quarta</label>
+                  <label><input type="checkbox" name="dia" value="4" /> Quinta</label>
+                  <label><input type="checkbox" name="dia" value="5" /> Sexta</label>
+                  <label><input type="checkbox" name="dia" value="6" /> Sábado</label>
+                </div>
+                <div class="horas-expediente">
+                  <label>Abertura <input name="abertura" type="time" required /></label>
+                  <label>Fechamento <input name="fechamento" type="time" required /></label>
+                  <label>Início do almoço <input name="inicioPausa" type="time" /></label>
+                  <label>Fim do almoço <input name="fimPausa" type="time" /></label>
+                </div>
+                <p>Deixe os dois campos de almoço vazios se não houver pausa.</p>
+                <button class="botao-principal" type="submit">Salvar expediente</button>
+              </fieldset>
+              <p role="status"></p>
+            </form>
+          </details>
+          <details class="configuracao-painel">
+            <summary>Serviços</summary>
+            <form id="form-servico" class="campos-formulario">
+              <fieldset disabled>
+                <legend>Cadastrar ou editar serviço</legend>
+                <p><label>Serviço <select name="servico"><option value="">Novo serviço</option></select></label></p>
+                <p><label>Nome <input name="nome" maxlength="100" required /></label></p>
+                <p><label>Duração em minutos <input name="duracaoMinutos" type="number" min="1" max="1439" required /></label></p>
+                <p><label>Preço em reais <input name="preco" type="number" min="0" max="999999.99" step="0.01" /></label></p>
+                <button class="botao-principal" type="submit">Salvar serviço</button>
+              </fieldset>
+              <p role="status"></p>
+            </form>
+          </details>
+        </section>
+      </div>
     </main>
     <!-- Módulos gerados pela compilação do TypeScript. -->
     <script type="module" src="/tema.js"></script>

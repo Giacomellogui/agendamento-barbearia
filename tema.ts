@@ -9,10 +9,11 @@ const sistema = window.matchMedia("(prefers-color-scheme: dark)");
 function aplicarTema(tema: string | null) {
   const escolha = tema === "claro" || tema === "escuro" ? tema : "";
   document.documentElement.dataset.tema = escolha;
-  if (seletor) seletor.value = escolha || (sistema.matches ? "escuro" : "claro");
+  const prefereEscuro = document.body.classList.contains("pagina-cliente") || sistema.matches;
+  if (seletor) seletor.value = escolha || (prefereEscuro ? "escuro" : "claro");
 }
 
-// Na primeira visita, vale o tema do dispositivo.
+// Na primeira visita, a área do cliente abre em escuro e o painel segue o dispositivo.
 let preferencia: string | null = null;
 try {
   preferencia = localStorage.getItem(chave);

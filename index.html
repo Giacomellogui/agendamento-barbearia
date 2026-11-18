@@ -6,7 +6,7 @@
     <title>Agendamento da barbearia</title>
     <link rel="stylesheet" href="/estilos.css" />
   </head>
-  <body>
+  <body class="pagina-cliente pagina-agenda">
     <!-- Barra com o seletor de tema compartilhado com o painel. -->
     <header class="barra">
       <span class="marca">Barbearia</span>
@@ -17,38 +17,77 @@
         </select>
       </label>
     </header>
-    <main class="cartao">
-      <h1>Agende seu horário</h1>
+    <main class="agenda-cliente">
+        <div class="acoes-painel" id="acesso-cliente">
+          <a href="/cliente/login">Entrar para reservar</a>
+          <a href="/cliente/cadastro">Criar conta</a>
+        </div>
+        <div class="conta-cliente" id="conta-cliente" hidden>
+          <div class="conta-identidade">
+            <span class="conta-avatar" id="iniciais-cliente" aria-hidden="true"></span>
+            <div class="conta-dados">
+              <span>Minha conta</span>
+              <strong id="nome-cliente"></strong>
+            </div>
+          </div>
+          <form action="/cliente/sair" method="post">
+            <button class="botao-secundario" type="submit" aria-label="Sair da minha conta">Sair</button>
+          </form>
+        </div>
 
-      <!-- Os IDs conectam os campos do formulário ao TypeScript. -->
-      <form id="agendamento">
-        <fieldset id="campos" class="campos-formulario">
-          <label for="servico">Escolha um serviço</label>
-          <select id="servico" required>
-            <option value="">Selecione...</option>
-          </select>
-          <p>
-            <label for="data">Escolha uma data</label>
-            <input type="date" id="data" name="data" required />
-          </p>
-          <p>
-            <label for="horario">Escolha um horário</label>
-            <select id="horario" required disabled>
-              <option value="">Escolha um serviço e uma data</option>
-            </select>
-          </p>
-          <p>
-            <label for="nome">Seu nome</label>
-            <input id="nome" autocomplete="name" maxlength="100" required />
-          </p>
-          <button id="confirmar" class="botao-principal" type="submit" disabled>
-              Confirmar agendamento
-          </button>
-        </fieldset>
-      </form>
-      <!-- Área de feedback da confirmação da reserva. -->
-      <p id="mensagem" role="status"></p>
+        <section id="agendar" aria-labelledby="titulo-agendar">
+        <h1 id="titulo-agendar">Agende seu horário</h1>
+        <form id="agendamento">
+          <fieldset id="campos" class="agenda-campos">
+            <legend class="texto-acessivel">Dados do agendamento</legend>
+            <fieldset class="agenda-grupo">
+              <legend>Serviços disponíveis</legend>
+              <div id="servicos" class="agenda-servicos"></div>
+            </fieldset>
+            <section aria-labelledby="titulo-data">
+              <h2 id="titulo-data">Quando?</h2>
+              <div class="agenda-calendario">
+                <div class="agenda-mes">
+                  <button id="mes-anterior" type="button" aria-label="Mês anterior">‹</button>
+                  <p id="mes-atual" aria-live="polite"></p>
+                  <button id="mes-seguinte" type="button" aria-label="Próximo mês">›</button>
+                </div>
+                <div class="agenda-semana" aria-hidden="true">
+                  <span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span>
+                </div>
+                <div id="dias" class="agenda-dias" role="group" aria-label="Escolha uma data"></div>
+              </div>
+            </section>
+            <fieldset class="agenda-grupo">
+              <legend id="titulo-horarios">Horários</legend>
+              <p id="situacao-horarios" role="status">Escolha um serviço para ver os horários.</p>
+              <div id="horarios" class="agenda-horarios"></div>
+            </fieldset>
+            <p id="mensagem" role="status"></p>
+            <div class="agenda-rodape">
+              <button id="confirmar" class="botao-principal" type="submit" disabled>Confirmar agendamento</button>
+            </div>
+          </fieldset>
+        </form>
+        </section>
+        <section id="minha-agenda" aria-labelledby="titulo-minha-agenda" hidden>
+          <h1 id="titulo-minha-agenda">Minha agenda</h1>
+          <p id="situacao-historico" role="status"></p>
+          <ul id="historico" class="agenda-historico"></ul>
+        </section>
     </main>
+    <nav class="agenda-navegacao" aria-label="Área do cliente">
+      <div class="agenda-navegacao-links">
+        <a id="link-agendar" href="#agendar" aria-current="page">
+          <span class="agenda-icone agenda-icone-inicio" aria-hidden="true"></span>
+          Início
+        </a>
+        <a id="link-minha-agenda" href="#minha-agenda">
+          <span class="agenda-icone agenda-icone-calendario" aria-hidden="true"></span>
+          Agenda
+        </a>
+      </div>
+    </nav>
     <!-- Módulos gerados pela compilação do TypeScript. -->
     <script type="module" src="/tema.js"></script>
     <script type="module" src="/agendamento.js"></script>

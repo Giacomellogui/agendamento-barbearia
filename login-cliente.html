@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login de cliente</title>
+    <link rel="stylesheet" href="/estilos.css" />
+  </head>
+  <body class="pagina-cliente">
+    <main class="cartao cliente-cartao">
+      <div class="cliente-capa">
+        <p class="marca">Barbearia</p>
+        <h1>Entrar na sua <span>conta</span></h1>
+      </div>
+      <div class="cliente-conteudo">
+        <form action="/cliente/login" method="post" class="campos-formulario">
+          <p><label for="telefone">Telefone com DDD</label>
+            <input id="telefone" name="telefone" type="tel" autocomplete="username" maxlength="24" required /></p>
+          <p><label for="senha">Senha</label>
+            <input id="senha" name="senha" type="password" autocomplete="current-password" maxlength="128" required /></p>
+          <button class="botao-principal" type="submit">Entrar</button>
+        </form>
+        <p id="mensagem" role="status"></p>
+        <p>Primeira vez aqui? <a href="/cliente/cadastro">Criar conta</a></p>
+      </div>
+    </main>
+    <script type="module" src="/tema.js"></script>
+    <script>
+      const erro = new URLSearchParams(location.search).get("erro");
+      if (erro === "credenciais" || erro === "dados") {
+        const mensagem = document.querySelector("#mensagem");
+        mensagem.dataset.estado = "erro";
+        mensagem.textContent = "Confira o telefone e a senha e tente novamente.";
+      }
+    </script>
+  </body>
+</html>

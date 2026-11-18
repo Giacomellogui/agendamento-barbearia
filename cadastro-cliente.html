@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cadastro de cliente</title>
+    <link rel="stylesheet" href="/estilos.css" />
+  </head>
+  <body class="pagina-cliente">
+    <main class="cartao cliente-cartao">
+      <div class="cliente-capa">
+        <p class="marca">Barbearia</p>
+        <h1>Criar <span>conta</span></h1>
+      </div>
+      <div class="cliente-conteudo">
+        <form action="/cliente/cadastro" method="post" class="campos-formulario">
+          <p><label for="nome">Nome completo</label>
+            <input id="nome" name="nome" autocomplete="name" maxlength="100" required /></p>
+          <p><label for="telefone">Telefone com DDD</label>
+            <input id="telefone" name="telefone" type="tel" autocomplete="tel" maxlength="24" required /></p>
+          <p><label for="senha">Senha (mínimo de 8 caracteres)</label>
+            <input id="senha" name="senha" type="password" autocomplete="new-password" minlength="8" maxlength="128" required /></p>
+          <button class="botao-principal" type="submit">Criar conta</button>
+        </form>
+        <p id="mensagem" role="status"></p>
+        <p>Já tem uma conta? <a href="/cliente/login">Entrar</a></p>
+      </div>
+    </main>
+    <script type="module" src="/tema.js"></script>
+    <script>
+      const erro = new URLSearchParams(location.search).get("erro");
+      const mensagem = document.querySelector("#mensagem");
+      if (erro === "dados" || erro === "telefone") {
+        mensagem.dataset.estado = "erro";
+        mensagem.textContent = erro === "telefone"
+          ? "Esse telefone já está cadastrado. Entre com sua conta."
+          : "Informe seu nome completo, um telefone com DDD e uma senha válida.";
+      }
+    </script>
+  </body>
+</html>

@@ -3,29 +3,37 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Entrar na agenda da barbearia</title>
+    <title>Login do barbeiro</title>
     <link rel="stylesheet" href="/estilos.css" />
   </head>
-  <body>
-    <main class="cartao">
-      <h1>Entrar na agenda da barbearia</h1>
-      <!-- Envia a senha ao servidor para abrir uma sessão. -->
-      <form action="/login" method="post" class="campos-formulario">
-        <p>
-          <label for="senha">Senha do barbeiro</label>
-          <input id="senha" name="senha" type="password" autocomplete="current-password" required />
-        </p>
-        <button class="botao-principal" type="submit">Entrar</button>
-      </form>
-      <p id="mensagem" role="status"></p>
-      <p><a href="/">Abrir página de agendamento</a></p>
+  <body class="pagina-barbeiro pagina-login-barbeiro">
+    <main class="login-barbeiro">
+      <div class="login-barbeiro-capa" aria-hidden="true"></div>
+      <div class="login-barbeiro-conteudo">
+        <h1>Login do barbeiro</h1>
+        <!-- Envia a senha ao servidor para abrir uma sessão. -->
+        <form action="/login" method="post" class="campos-formulario">
+          <p>
+            <label for="senha">Senha do barbeiro</label>
+            <input id="senha" name="senha" type="password" autocomplete="current-password" required />
+          </p>
+          <button class="botao-principal" type="submit">Entrar no painel</button>
+        </form>
+        <p id="mensagem" role="status"></p>
+        <a class="login-barbeiro-link" href="/cliente/login"><span aria-hidden="true">←</span> Área do cliente</a>
+      </div>
     </main>
+    <script type="module" src="/tema.js"></script>
     <script>
       // O parâmetro da URL indica qual mensagem de erro deve aparecer.
       const erro = new URLSearchParams(location.search).get("erro");
       const mensagem = document.querySelector("#mensagem");
-      if (erro === "senha") mensagem.textContent = "Senha incorreta. Tente novamente.";
-      if (erro === "configuracao") mensagem.textContent = "Configure BARBEIRO_SENHA antes de iniciar o servidor.";
+      if (erro === "senha" || erro === "configuracao") {
+        mensagem.dataset.estado = "erro";
+        mensagem.textContent = erro === "senha"
+          ? "Senha incorreta. Tente novamente."
+          : "Configure BARBEIRO_SENHA antes de iniciar o servidor.";
+      }
     </script>
   </body>
 </html>
