@@ -1,0 +1,11 @@
+{
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.frontend.json",
+    "start": "npm run build && node server.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}

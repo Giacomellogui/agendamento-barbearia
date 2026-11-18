@@ -1,0 +1,5 @@
+node_modules/
+agenda.sqlite*
+.env
+/agendamento.js
+/painel.js

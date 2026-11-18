@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agendamento da barbearia</title>
+    <link rel="stylesheet" href="/estilos.css" />
+  </head>
+  <body>
+    <main class="cartao">
+      <h1>Agende seu horário</h1>
+
+      <form id="agendamento">
+        <fieldset id="campos" class="campos-formulario">
+          <label for="servico">Escolha um serviço</label>
+          <select id="servico" required>
+            <option value="">Selecione...</option>
+          </select>
+          <p>
+            <label for="data">Escolha uma data</label>
+            <input type="date" id="data" name="data" required />
+          </p>
+          <p>
+            <label for="horario">Escolha um horário</label>
+            <select id="horario" required disabled>
+              <option value="">Escolha um serviço e uma data</option>
+            </select>
+          </p>
+          <p>
+            <label for="nome">Seu nome</label>
+            <input id="nome" autocomplete="name" maxlength="100" required />
+          </p>
+          <button id="confirmar" class="botao-principal" type="submit" disabled>
+              Confirmar agendamento
+          </button>
+        </fieldset>
+      </form>
+      <p id="mensagem" role="status"></p>
+    </main>
+    <script type="module" src="/agendamento.js"></script>
+  </body>
+</html>

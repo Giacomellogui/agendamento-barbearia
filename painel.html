@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agenda da barbearia</title>
+    <link rel="stylesheet" href="/estilos.css" />
+  </head>
+  <body>
+    <main class="cartao">
+      <h1>Agenda da barbearia</h1>
+      <form action="/sair" method="post">
+        <button type="submit">Sair</button>
+      </form>
+      <p><a href="/">Abrir página de agendamento</a></p>
+      <label for="data">Consultar dia</label>
+      <input id="data" type="date" />
+      <p id="mensagem" role="status"></p>
+      <p id="situacao" role="status"></p>
+      <ul id="reservas"></ul>
+    </main>
+    <script type="module" src="/painel.js"></script>
+  </body>
+</html>

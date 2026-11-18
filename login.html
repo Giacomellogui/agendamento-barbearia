@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Entrar na agenda da barbearia</title>
+    <link rel="stylesheet" href="/estilos.css" />
+  </head>
+  <body>
+    <main class="cartao">
+      <h1>Entrar na agenda da barbearia</h1>
+      <form action="/login" method="post" class="campos-formulario">
+        <p>
+          <label for="senha">Senha do barbeiro</label>
+          <input id="senha" name="senha" type="password" autocomplete="current-password" required />
+        </p>
+        <button class="botao-principal" type="submit">Entrar</button>
+      </form>
+      <p id="mensagem" role="status"></p>
+      <p><a href="/">Abrir página de agendamento</a></p>
+    </main>
+    <script>
+      const erro = new URLSearchParams(location.search).get("erro");
+      const mensagem = document.querySelector("#mensagem");
+      if (erro === "senha") mensagem.textContent = "Senha incorreta. Tente novamente.";
+      if (erro === "configuracao") mensagem.textContent = "Configure BARBEIRO_SENHA antes de iniciar o servidor.";
+    </script>
+  </body>
+</html>
