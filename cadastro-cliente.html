@@ -13,12 +13,14 @@
         <h1>Criar <span>conta</span></h1>
       </div>
       <div class="cliente-conteudo">
-        <!-- Envia nome completo, telefone com DDD e senha para criar a conta. -->
+        <!-- O e-mail só pode recuperar a senha depois da confirmação pelo link. -->
         <form action="/cliente/cadastro" method="post" class="campos-formulario">
           <p><label for="nome">Nome completo</label>
             <input id="nome" name="nome" autocomplete="name" maxlength="100" required /></p>
           <p><label for="telefone">Telefone com DDD</label>
             <input id="telefone" name="telefone" type="tel" autocomplete="tel" maxlength="24" required /></p>
+          <p><label for="email">E-mail de recuperação (opcional)</label>
+            <input id="email" name="email" type="email" autocomplete="email" maxlength="254" /></p>
           <p><label for="senha">Senha (mínimo de 8 caracteres)</label>
             <input id="senha" name="senha" type="password" autocomplete="new-password" minlength="8" maxlength="128" required /></p>
           <button class="botao-principal" type="submit">Criar conta</button>
@@ -32,11 +34,13 @@
       // Informa se há dados inválidos ou se o telefone já está cadastrado.
       const erro = new URLSearchParams(location.search).get("erro");
       const mensagem = document.querySelector("#mensagem");
-      if (erro === "dados" || erro === "telefone") {
+      if (erro === "dados" || erro === "telefone" || erro === "email") {
         mensagem.dataset.estado = "erro";
         mensagem.textContent = erro === "telefone"
           ? "Esse telefone já está cadastrado. Entre com sua conta."
-          : "Informe seu nome completo, um telefone com DDD e uma senha válida.";
+          : erro === "email"
+            ? "Confira o endereço de e-mail de recuperação."
+            : "Informe seu nome completo, um telefone com DDD e uma senha válida.";
       }
     </script>
   </body>

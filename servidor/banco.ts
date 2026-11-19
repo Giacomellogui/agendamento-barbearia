@@ -33,6 +33,17 @@ banco.exec(`
     salt TEXT NOT NULL,
     hash TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS links_cliente (
+    cliente_id INTEGER NOT NULL REFERENCES clientes(id),
+    tipo TEXT NOT NULL CHECK (tipo IN ('verificacao', 'recuperacao')),
+    email TEXT NOT NULL,
+    digest TEXT UNIQUE,
+    expira_em INTEGER NOT NULL,
+    solicitado_em INTEGER NOT NULL,
+    janela_inicio INTEGER NOT NULL,
+    envios INTEGER NOT NULL,
+    PRIMARY KEY (cliente_id, tipo)
+  );
   CREATE TABLE IF NOT EXISTS avisos_whatsapp (
     id INTEGER PRIMARY KEY,
     reserva_id INTEGER NOT NULL,
@@ -55,6 +66,12 @@ banco.exec(`
     (2, 'Barba', 20, NULL),
     (3, 'Corte e barba', 50, NULL);
 `);
+
+// As contas que já existem podem adicionar um e-mail após entrar pelo telefone.
+if (!banco.prepare("PRAGMA table_info(clientes)").all().some(({ name }) => name === "email_verificado")) {
+  banco.exec("ALTER TABLE clientes ADD COLUMN email_verificado TEXT");
+}
+banco.exec("CREATE UNIQUE INDEX IF NOT EXISTS clientes_email_verificado ON clientes (email_verificado) WHERE email_verificado IS NOT NULL");
 
 // Acrescenta os campos de histórico sem recriar a tabela de reservas.
 const colunasReserva = banco.prepare("PRAGMA table_info(reservas)").all().map(({ name }) => name);

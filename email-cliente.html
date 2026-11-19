@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>E-mail de recuperação</title>
+    <link rel="stylesheet" href="/estilos.css" />
+  </head>
+  <body class="pagina-cliente">
+    <main class="cartao cliente-cartao">
+      <div class="cliente-capa">
+        <p class="marca">Barbearia</p>
+        <h1>E-mail de <span>recuperação</span></h1>
+      </div>
+      <div class="cliente-conteudo">
+        <p id="mensagem" role="status"></p>
+        <p id="email-atual" hidden></p>
+        <form id="cadastrar-email" action="/cliente/email" method="post" class="campos-formulario" hidden>
+          <p>
+            <label for="email">E-mail</label>
+            <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required />
+          </p>
+          <p>
+            <label for="senha">Senha atual</label>
+            <input id="senha" name="senha" type="password" autocomplete="current-password" maxlength="128" required />
+          </p>
+          <button class="botao-principal" type="submit">Enviar confirmação</button>
+        </form>
+        <form id="confirmar-email" action="/cliente/email/confirmar" method="post" class="campos-formulario" hidden>
+          <input id="token" name="token" type="hidden" />
+          <p>Confirme que deseja usar este endereço para recuperar sua senha.</p>
+          <button class="botao-principal" type="submit">Confirmar e-mail</button>
+        </form>
+        <p><a href="/">Voltar para minha conta</a></p>
+      </div>
+    </main>
+    <script type="module" src="/tema.js"></script>
+    <script>
+      const mensagem = document.querySelector("#mensagem");
+      const estado = new URLSearchParams(location.search).get("estado");
+      const confirmando = location.pathname.endsWith("/confirmar");
+      const avisos = new Map([
+        ["solicitado", "Se o endereço estiver disponível, você receberá um link de confirmação válido por uma hora."],
+        ["verificado", "E-mail confirmado. Agora ele pode ser usado para recuperar sua senha."],
+        ["invalido", "Link inválido, expirado ou já usado. Entre na sua conta e solicite outro."],
+        ["senha", "Confira a senha atual e tente novamente."],
+        ["dados", "Confira o endereço e a senha. Se acabou de solicitar um link, tente novamente mais tarde."],
+        ["indisponivel", "O envio por e-mail está indisponível no momento."],
+      ]);
+      if (avisos.has(estado)) {
+        mensagem.dataset.estado = estado === "verificado" ? "sucesso" : estado === "solicitado" ? "" : "erro";
+        if (estado === "solicitado") delete mensagem.dataset.estado;
+        mensagem.textContent = avisos.get(estado);
+      }
+      if (confirmando) {
+        // Abrir o e-mail só exibe o formulário. O botão envia o token para confirmar.
+        const token = location.hash.slice(1);
+        if (token) history.replaceState(null, "", location.pathname + location.search);
+        if (/^[A-Za-z0-9_-]{43}$/.test(token)) {
+          document.querySelector("#token").value = token;
+          document.querySelector("#confirmar-email").hidden = false;
+        } else if (!estado) {
+          mensagem.dataset.estado = "erro";
+          mensagem.textContent = "Abra o link completo recebido no e-mail.";
+        }
+      } else {
+        document.querySelector("#cadastrar-email").hidden = false;
+        fetch("/cliente/sessao").then((resposta) => resposta.json()).then((cliente) => {
+          if (!cliente) return;
+          const atual = document.querySelector("#email-atual");
+          atual.textContent = cliente.email ? `E-mail confirmado: ${cliente.email}` : "Nenhum e-mail confirmado.";
+          atual.hidden = false;
+        }).catch(() => {});
+      }
+    </script>
+  </body>
+</html>

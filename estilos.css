@@ -409,6 +409,7 @@ button:enabled { cursor: pointer; }
 .conta-dados strong { display: block; }
 .conta-dados span { color: var(--suave); font-size: 0.75rem; }
 .conta-dados strong { overflow-wrap: anywhere; font-size: 0.95rem; }
+.conta-dados a { font-size: 0.8rem; }
 .conta-cliente .botao-secundario { font-size: 0.85rem; }
 
 .agenda-campos,

@@ -4,10 +4,13 @@ import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { banco } from "./banco.ts";
 import { lerCorpo, redirecionar, responderJson } from "./http.ts";
+import { emailConfigurado, enviarLinkPorEmail } from "./email.ts";
 
 const login = readFileSync(new URL("../login.html", import.meta.url));
 const cadastroCliente = readFileSync(new URL("../cadastro-cliente.html", import.meta.url));
 const loginCliente = readFileSync(new URL("../login-cliente.html", import.meta.url));
+const paginaRecuperacao = readFileSync(new URL("../recuperar-senha.html", import.meta.url));
+const paginaEmail = readFileSync(new URL("../email-cliente.html", import.meta.url));
 // A senha vem do ambiente. A sessão fica em memória e expira após oito horas.
 const senha = process.env.BARBEIRO_SENHA;
 const duracaoSessao = 8 * 60 * 60;
@@ -27,7 +30,7 @@ export function autenticado(req: IncomingMessage) {
 }
 
 // A consulta de sessão retorna o perfil. O hash e o salt são usados no login.
-const clientePorId = banco.prepare("SELECT id, nome, telefone FROM clientes WHERE id = ?");
+const clientePorId = banco.prepare("SELECT id, nome, telefone, email_verificado FROM clientes WHERE id = ?");
 const clientePorTelefone = banco.prepare("SELECT id, salt, hash FROM clientes WHERE telefone = ?");
 const inserirCliente = banco.prepare(`
   INSERT INTO clientes (nome, telefone, salt, hash) VALUES (?, ?, ?, ?)
@@ -35,6 +38,105 @@ const inserirCliente = banco.prepare(`
 `);
 const derivarSenha = promisify(scrypt);
 const sessoesClientes = new Map<string, { id: number; expira: number }>();
+const caminhoRecuperacao = "/cliente/recuperar-senha";
+const caminhoEmail = "/cliente/email";
+const janelaEnvios = 15 * 60_000;
+const enviosPorOrigem = new Map<string, { inicio: number; total: number }>();
+const clientePorEmail = banco.prepare("SELECT id FROM clientes WHERE email_verificado = ?");
+const credencialPorId = banco.prepare("SELECT hash, salt FROM clientes WHERE id = ?");
+// Mantém um link ativo por conta e finalidade e limita a frequência dos reenvios.
+const emitirLink = banco.prepare(`
+  INSERT INTO links_cliente (cliente_id, tipo, email, digest, expira_em, solicitado_em, janela_inicio, envios)
+  VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+  ON CONFLICT(cliente_id, tipo) DO UPDATE SET
+    email = excluded.email, digest = excluded.digest, expira_em = excluded.expira_em,
+    solicitado_em = excluded.solicitado_em,
+    envios = CASE WHEN janela_inicio <= ? THEN 1 ELSE envios + 1 END,
+    janela_inicio = CASE WHEN janela_inicio <= ? THEN excluded.janela_inicio ELSE janela_inicio END
+  WHERE solicitado_em <= ? AND (janela_inicio <= ? OR envios < 3)
+`);
+const consultarLink = banco.prepare("SELECT cliente_id, email FROM links_cliente WHERE tipo = ? AND digest = ? AND expira_em > ?");
+const invalidarLink = banco.prepare("UPDATE links_cliente SET digest = NULL WHERE digest = ?");
+const invalidarLinksCliente = banco.prepare("UPDATE links_cliente SET digest = NULL WHERE cliente_id = ?");
+const verificarEmail = banco.prepare(`
+  UPDATE clientes SET email_verificado = ? WHERE id = ?
+  AND NOT EXISTS (SELECT 1 FROM clientes WHERE email_verificado = ? AND id <> ?)
+`);
+const atualizarSenha = banco.prepare("UPDATE clientes SET salt = ?, hash = ? WHERE id = ? AND email_verificado = ?");
+
+function normalizarEmail(valor: string) {
+  const email = valor.trim().toLowerCase();
+  return email.length <= 254 && /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(email) ? email : "";
+}
+
+function permitirSolicitacao(origem: string) {
+  const agora = Date.now();
+  for (const [endereco, janela] of enviosPorOrigem) {
+    if (agora - janela.inicio >= janelaEnvios) enviosPorOrigem.delete(endereco);
+  }
+  const janela = enviosPorOrigem.get(origem) ?? { inicio: agora, total: 0 };
+  if (janela.total >= 20) return false;
+  janela.total++;
+  enviosPorOrigem.set(origem, janela);
+  return true;
+}
+
+// Envia um token aleatório por e-mail e guarda somente o hash no banco.
+async function solicitarLink(id: number, email: string, tipo: "verificacao" | "recuperacao") {
+  const agora = Date.now();
+  const inicioJanela = agora - janelaEnvios;
+  const token = randomBytes(32).toString("base64url");
+  const digest = hashSenha(token).toString("hex");
+  const verificando = tipo === "verificacao";
+  const validade = verificando ? 60 * 60_000 : 15 * 60_000;
+  if (!emitirLink.run(id, tipo, email, digest, agora + validade, agora, agora,
+    inicioJanela, inicioJanela, agora - 60_000, inicioJanela).changes) return;
+  try {
+    const caminho = verificando ? caminhoEmail + "/confirmar" : caminhoRecuperacao + "/redefinir";
+    if (await enviarLinkPorEmail(email, caminho, token, verificando)) return;
+  } catch {
+    // O endereço, o token e o conteúdo do provedor ficam fora do log.
+  }
+  invalidarLink.run(digest);
+  console.warn("Não foi possível enviar um e-mail de acesso. Confira as credenciais e o remetente.");
+}
+
+function digestLink(token: string | null) {
+  return token && /^[A-Za-z0-9_-]{43}$/.test(token) ? hashSenha(token).toString("hex") : "";
+}
+
+// A mudança e o consumo do link são atômicos. A operação também revalida a expiração.
+function concluirLink(tipo: "verificacao" | "recuperacao", digest: string, atualizar: (id: number, email: string) => boolean) {
+  banco.exec("BEGIN IMMEDIATE");
+  try {
+    const link = consultarLink.get(tipo, digest, Date.now());
+    if (!link || !atualizar(Number(link.cliente_id), String(link.email))) {
+      banco.exec("ROLLBACK");
+      return undefined;
+    }
+    const id = Number(link.cliente_id);
+    // Descarta links antigos após trocar a senha ou confirmar um novo e-mail.
+    invalidarLinksCliente.run(id);
+    banco.exec("COMMIT");
+    return id;
+  } catch (erro) {
+    banco.exec("ROLLBACK");
+    throw erro;
+  }
+}
+
+async function redefinirSenha(digest: string, senhaNova: string) {
+  if (!digest || !consultarLink.get("recuperacao", digest, Date.now())) return false;
+  const salt = randomBytes(16).toString("hex");
+  const hash = await derivarSenha(senhaNova, salt, 64) as Buffer;
+  const id = concluirLink("recuperacao", digest, (clienteId, email) =>
+    Boolean(atualizarSenha.run(salt, hash.toString("hex"), clienteId, email).changes));
+  if (id === undefined) return false;
+  for (const [token, sessao] of sessoesClientes) {
+    if (sessao.id === id) sessoesClientes.delete(token);
+  }
+  return true;
+}
 
 // Salva telefones com DDD em um formato único para a busca da conta.
 function telefoneNormalizado(valor: string) {
@@ -68,7 +170,103 @@ function iniciarSessaoCliente(req: IncomingMessage, res: ServerResponse, id: num
 }
 
 
+function consoleEmail() {
+  console.warn("Não foi possível processar um link de acesso por e-mail.");
+}
+
 export async function atenderAutenticacao(req: IncomingMessage, res: ServerResponse, url: URL) {
+  const rotaEmail = url.pathname === caminhoEmail || url.pathname === caminhoEmail + "/confirmar";
+  const rotaRecuperacao = url.pathname === caminhoRecuperacao || url.pathname === caminhoRecuperacao + "/redefinir";
+  if ((rotaEmail || rotaRecuperacao) && req.method === "GET") {
+    if (url.pathname === caminhoEmail && !clienteAutenticado(req)) {
+      redirecionar(res, "/cliente/login");
+      return true;
+    }
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+    res.end(rotaEmail ? paginaEmail : paginaRecuperacao);
+    return true;
+  }
+  if ((rotaEmail || rotaRecuperacao) && req.method === "POST") {
+    if (req.headers["sec-fetch-site"] === "cross-site") {
+      responderJson(res, 403, { mensagem: "Abra o formulário da barbearia para continuar." });
+      return true;
+    }
+    const corpo = await lerCorpo(req).catch(() => null);
+    const dados = new URLSearchParams(corpo ?? "");
+    const email = normalizarEmail(dados.get("email") ?? "");
+    const origem = req.socket.remoteAddress ?? "local";
+    if (url.pathname === caminhoRecuperacao) {
+      if (!emailConfigurado) {
+        redirecionar(res, caminhoRecuperacao + "?estado=indisponivel");
+      } else if (!email) {
+        redirecionar(res, caminhoRecuperacao + "?estado=email");
+      } else {
+        // Dá a mesma resposta para e-mails verificados e endereços desconhecidos.
+        redirecionar(res, caminhoRecuperacao + "?estado=solicitado");
+        if (permitirSolicitacao(origem)) {
+          const cliente = clientePorEmail.get(email);
+          if (cliente) void solicitarLink(Number(cliente.id), email, "recuperacao").catch(consoleEmail);
+        }
+      }
+      return true;
+    }
+    if (url.pathname === caminhoEmail) {
+      const cliente = clienteAutenticado(req);
+      if (!cliente) {
+        redirecionar(res, "/cliente/login");
+        return true;
+      }
+      const senhaAtual = dados.get("senha") ?? "";
+      if (!emailConfigurado || !email || senhaAtual.length < 8 || senhaAtual.length > 128 || !permitirSolicitacao(origem)) {
+        const estado = emailConfigurado ? "dados" : "indisponivel";
+        redirecionar(res, caminhoEmail + "?estado=" + estado);
+        return true;
+      }
+      // Alterar o endereço de recuperação exige revalidar a senha da conta.
+      const id = Number(cliente.id);
+      const credencial = credencialPorId.get(id);
+      const hash = credencial ? await derivarSenha(senhaAtual, String(credencial.salt), 64).catch(() => null) as Buffer | null : null;
+      if (!hash || !credencial || !timingSafeEqual(hash, Buffer.from(String(credencial.hash), "hex")) ||
+          clienteAutenticado(req)?.id !== cliente.id || credencialPorId.get(id)?.hash !== credencial.hash) {
+        redirecionar(res, caminhoEmail + "?estado=senha");
+        return true;
+      }
+      redirecionar(res, caminhoEmail + "?estado=solicitado");
+      const existente = clientePorEmail.get(email);
+      if (!existente && email !== cliente.email_verificado) {
+        void solicitarLink(id, email, "verificacao").catch(consoleEmail);
+      }
+      return true;
+    }
+    const digest = digestLink(dados.get("token"));
+    if (rotaEmail) {
+      let confirmado = false;
+      try {
+        confirmado = Boolean(digest && concluirLink("verificacao", digest, (id, destino) =>
+          Boolean(verificarEmail.run(destino, id, destino, id).changes)));
+      } catch {
+        consoleEmail();
+      }
+      redirecionar(res, caminhoEmail + "/confirmar?estado=" + (confirmado ? "verificado" : "invalido"));
+      return true;
+    }
+    const senhaNova = dados.get("senha") ?? "";
+    if (senhaNova.length < 8 || senhaNova.length > 128 || senhaNova !== dados.get("confirmacao")) {
+      responderJson(res, 400, { mensagem: "Confira se as duas senhas são iguais e têm pelo menos oito caracteres." });
+      return true;
+    }
+    try {
+      if (await redefinirSenha(digest, senhaNova)) {
+        res.setHeader("Set-Cookie", "sessao_cliente=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+        responderJson(res, 200, { mensagem: "Senha alterada." });
+      } else {
+        responderJson(res, 400, { mensagem: "Link inválido, expirado ou já usado. Solicite outro." });
+      }
+    } catch {
+      responderJson(res, 503, { mensagem: "Não foi possível alterar a senha agora. Tente novamente." });
+    }
+    return true;
+  }
   // O cadastro e o login do cliente usam uma sessão separada da do barbeiro.
   const criandoConta = url.pathname === "/cliente/cadastro";
   if (criandoConta || url.pathname === "/cliente/login") {
@@ -92,6 +290,12 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
         redirecionar(res, `${url.pathname}?erro=dados`);
         return true;
       }
+      const emailInformado = criandoConta ? (dados.get("email") ?? "").trim() : "";
+      const emailRecuperacao = normalizarEmail(emailInformado);
+      if (emailInformado && !emailRecuperacao) {
+        redirecionar(res, "/cliente/cadastro?erro=email");
+        return true;
+      }
       const cadastro = criandoConta ? undefined : clientePorTelefone.get(telefone);
       // Deriva a senha com scrypt e um salt armazenado junto à conta.
       const salt = cadastro ? String(cadastro.salt) : randomBytes(16).toString("hex");
@@ -106,9 +310,20 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
           redirecionar(res, "/cliente/cadastro?erro=telefone");
           return true;
         }
-        iniciarSessaoCliente(req, res, Number(cliente.id));
+        const id = Number(cliente.id);
+        iniciarSessaoCliente(req, res, id);
+        if (emailRecuperacao) {
+          // Cria a conta imediatamente e confirma o endereço em uma etapa separada.
+          redirecionar(res, caminhoEmail + "?estado=" + (emailConfigurado ? "solicitado" : "indisponivel"));
+          if (emailConfigurado && permitirSolicitacao(req.socket.remoteAddress ?? "local") &&
+              !clientePorEmail.get(emailRecuperacao)) {
+            void solicitarLink(id, emailRecuperacao, "verificacao").catch(consoleEmail);
+          }
+          return true;
+        }
       } else {
-        if (!cadastro || !timingSafeEqual(hash, Buffer.from(String(cadastro.hash), "hex"))) {
+        if (!cadastro || !timingSafeEqual(hash, Buffer.from(String(cadastro.hash), "hex")) ||
+            clientePorTelefone.get(telefone)?.hash !== cadastro.hash) {
           redirecionar(res, "/cliente/login?erro=credenciais");
           return true;
         }
@@ -121,7 +336,7 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
   if (url.pathname === "/cliente/sessao" && req.method === "GET") {
     res.setHeader("Cache-Control", "no-store");
     const cliente = clienteAutenticado(req);
-    responderJson(res, 200, cliente ? { nome: cliente.nome } : null);
+    responderJson(res, 200, cliente ? { nome: cliente.nome, email: cliente.email_verificado } : null);
     return true;
   }
   if (url.pathname === "/cliente/sair" && req.method === "POST") {

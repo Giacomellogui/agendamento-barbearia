@@ -22,17 +22,23 @@
           <button class="botao-principal" type="submit">Entrar</button>
         </form>
         <p id="mensagem" role="status"></p>
+        <p><a href="/cliente/recuperar-senha">Esqueci minha senha</a></p>
         <p>Primeira vez aqui? <a href="/cliente/cadastro">Criar conta</a></p>
       </div>
     </main>
     <script type="module" src="/tema.js"></script>
     <script>
       // Exibe a mensagem correspondente ao redirecionamento do servidor.
-      const erro = new URLSearchParams(location.search).get("erro");
+      const parametros = new URLSearchParams(location.search);
+      const erro = parametros.get("erro");
       if (erro === "credenciais" || erro === "dados") {
         const mensagem = document.querySelector("#mensagem");
         mensagem.dataset.estado = "erro";
         mensagem.textContent = "Confira o telefone e a senha e tente novamente.";
+      } else if (parametros.get("estado") === "senha-alterada") {
+        const mensagem = document.querySelector("#mensagem");
+        mensagem.dataset.estado = "sucesso";
+        mensagem.textContent = "Senha alterada. Entre com a nova senha.";
       }
     </script>
   </body>

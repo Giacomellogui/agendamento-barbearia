@@ -33,6 +33,20 @@ export function estadoDosAvisos() {
   return { configurado: whatsappConfigurado, avisos: listarAvisos.all() };
 }
 
+function enviarModelo(destinatario: string, nome: string, components: unknown[]) {
+  return fetch(`https://graph.facebook.com/${whatsappVersao}/${whatsappRemetente}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${whatsappToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: destinatario,
+      type: "template",
+      template: { name: nome, language: { code: "pt_BR" }, components },
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+}
+
 let enviandoAvisos = false;
 // A fila fica no SQLite para sobreviver a falhas temporárias do WhatsApp ou reinícios.
 export async function enviarAvisos() {
@@ -45,25 +59,11 @@ export async function enviarAvisos() {
       let erro = "Falha de conexão com a Meta.";
       try {
         // A ordem dos três parâmetros deve corresponder ao modelo aprovado na Meta.
-        const resposta = await fetch(`https://graph.facebook.com/${whatsappVersao}/${whatsappRemetente}/messages`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${whatsappToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: whatsappDestino,
-            type: "template",
-            template: {
-              name: whatsappModelo,
-              language: { code: "pt_BR" },
-              components: [{
-                type: "body",
-                parameters: [aviso.reserva_id, aviso.anterior, aviso.novo]
-                  .map((valor) => ({ type: "text", text: String(valor) })),
-              }],
-            },
-          }),
-          signal: AbortSignal.timeout(8000),
-        });
+        const resposta = await enviarModelo(whatsappDestino, whatsappModelo, [{
+          type: "body",
+          parameters: [aviso.reserva_id, aviso.anterior, aviso.novo]
+            .map((valor) => ({ type: "text", text: String(valor) })),
+        }]);
         const resultado = await resposta.json().catch(() => null) as {
           messages?: Array<{ id?: string }>;
           error?: { code?: number; error_subcode?: number };

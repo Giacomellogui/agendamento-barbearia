@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -14,12 +14,23 @@ test("regras da agenda pela API HTTP", { timeout: 15000 }, async (t) => {
   const arquivoEnv = join(pasta, ".env");
   await writeFile(arquivoEnv, "BARBEIRO_SENHA=senha-de-teste\n");
   const liberarMeta = join(pasta, "liberar-meta");
+  const mensagemVerificacao = join(pasta, "email-verificacao.json");
+  const mensagemCadastro = join(pasta, "email-cadastro.json");
+  const mensagemRecuperacao = join(pasta, "email-recuperacao.json");
   // Intercepta apenas chamadas à Meta. A API de agendamento roda normalmente via HTTP.
   const metaSimulada = `
-    import { existsSync } from "node:fs";
+    import { existsSync, writeFileSync } from "node:fs";
     const fetchOriginal = globalThis.fetch;
     globalThis.fetch = async (url, opcoes) => {
-      if (new URL(url).hostname !== "graph.facebook.com") return fetchOriginal(url, opcoes);
+      const host = new URL(url).hostname;
+      if (host === "api.resend.com") {
+        const dados = JSON.parse(opcoes.body);
+        const destino = dados.to[0] === "novo@example.test" ? ${JSON.stringify(mensagemCadastro)}
+          : dados.text.includes("/confirmar#") ? ${JSON.stringify(mensagemVerificacao)} : ${JSON.stringify(mensagemRecuperacao)};
+        writeFileSync(destino, JSON.stringify(dados));
+        return Response.json({ id: "email-simulado" });
+      }
+      if (host !== "graph.facebook.com") return fetchOriginal(url, opcoes);
       const dados = JSON.parse(opcoes.body);
       const novo = dados.template.components[0].parameters[2].text;
       if (novo.endsWith("12:00")) {
@@ -36,7 +47,9 @@ test("regras da agenda pela API HTTP", { timeout: 15000 }, async (t) => {
     env: { ...ambiente, AGENDA_DB: arquivoBanco, AGENDA_PORT: "0",
       WHATSAPP_TOKEN: "token-simulado",
       WHATSAPP_PHONE_NUMBER_ID: "1234", WHATSAPP_BARBEIRO_NUMERO: "5511912340000",
-      WHATSAPP_TEMPLATE: "reagendamento_teste", WHATSAPP_GRAPH_VERSION: "v27.0" },
+      WHATSAPP_TEMPLATE: "reagendamento_teste", WHATSAPP_GRAPH_VERSION: "v27.0",
+      RESEND_API_KEY: "email-simulado", EMAIL_FROM: "Barbearia <agenda@example.test>",
+      APP_BASE_URL: "https://barbearia.example.test" },
     stdio: ["ignore", "pipe", "inherit"],
   });
   const fim = once(servidor, "exit");
@@ -199,5 +212,107 @@ test("regras da agenda pela API HTTP", { timeout: 15000 }, async (t) => {
       const reservas = await (await req("/cliente/agendamentos", { cookie: clienteA })).json();
       assert.equal(reservas.find((reserva) => reserva.id === id).comparecimento, estado);
     }
+  });
+  await t.test("verifica e-mail, recupera a senha uma vez e encerra as sessões antigas", async () => {
+    const telefone = "11912340001";
+    const email = "cliente@example.test";
+    const caminho = "/cliente/recuperar-senha";
+    const enviarFormulario = (rota, campos, cookie) =>
+      req(rota, { method: "POST", dados: new URLSearchParams(campos), cookie });
+    const entrar = (senha) => enviarFormulario("/cliente/login", { telefone, senha });
+    async function lerLink(arquivo, rota) {
+      let texto;
+      for (let tentativa = 0; tentativa < 40 && !texto; tentativa++) {
+        texto = await readFile(arquivo, "utf8").catch((erro) => {
+          if (erro.code !== "ENOENT") throw erro;
+        });
+        if (!texto) await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      assert.ok(texto, "O provedor simulado deve receber o e-mail.");
+      const payload = JSON.parse(texto);
+      assert.deepEqual(payload.to, [email]);
+      const link = new URL(payload.text.match(/https:\/\/[^\s]+/)[0]);
+      assert.equal(link.origin, "https://barbearia.example.test");
+      assert.equal(link.pathname, rota);
+      assert.match(link.hash.slice(1), /^[A-Za-z0-9_-]{43}$/);
+      return link.hash.slice(1);
+    }
+
+    const sessaoAntiga = (await entrar("senha-de-teste")).headers.get("set-cookie").split(";")[0];
+    assert.match(await (await req("/cliente/login")).text(), /href="\/cliente\/recuperar-senha"/);
+    assert.equal((await req("/cliente/email")).headers.get("location"), "/cliente/login");
+    const errado = await enviarFormulario("/cliente/email", { email, senha: "senha-errada" }, clienteA);
+    assert.match(errado.headers.get("location"), /estado=senha/);
+    const envio = await enviarFormulario("/cliente/email", { email: " Cliente@Example.test ", senha: "senha-de-teste" }, clienteA);
+    assert.match(envio.headers.get("location"), /estado=solicitado/);
+    const verificar = await lerLink(mensagemVerificacao, "/cliente/email/confirmar");
+    assert.equal((await req("/cliente/email/confirmar")).status, 200);
+    assert.equal((await (await req("/cliente/sessao", { cookie: clienteA })).json()).email, null);
+    const semVerificacao = await enviarFormulario(caminho, { email });
+    assert.match(semVerificacao.headers.get("location"), /estado=solicitado/);
+    await assert.rejects(access(mensagemRecuperacao), { code: "ENOENT" });
+    const verificado = await enviarFormulario("/cliente/email/confirmar", { token: verificar });
+    assert.match(verificado.headers.get("location"), /estado=verificado/);
+    assert.equal((await (await req("/cliente/sessao", { cookie: clienteA })).json()).email, email);
+    assert.match((await enviarFormulario("/cliente/email/confirmar", { token: verificar })).headers.get("location"), /estado=invalido/);
+    const desconhecido = await enviarFormulario(caminho, { email: "nao-cadastrado@example.test" });
+    const pedido = await enviarFormulario(caminho, { email });
+    assert.equal(pedido.headers.get("location"), desconhecido.headers.get("location"));
+    const token = await lerLink(mensagemRecuperacao, caminho + "/redefinir");
+    const senha = "nova-senha-de-teste";
+    const trocar = (link) => enviarFormulario(caminho + "/redefinir", { token: link, senha, confirmacao: senha });
+    assert.equal((await trocar(verificar)).status, 400);
+    assert.equal((await req(caminho + "/redefinir")).status, 200);
+    const banco = new DatabaseSync(arquivoBanco);
+    try {
+      const alterarValidade = banco.prepare("UPDATE links_cliente SET expira_em = ? WHERE tipo = 'recuperacao'");
+      const { expira_em } = banco.prepare("SELECT expira_em FROM links_cliente WHERE tipo = 'recuperacao'").get();
+      alterarValidade.run(Date.now() - 1);
+      assert.equal((await trocar(token)).status, 400);
+      alterarValidade.run(expira_em);
+    } finally {
+      banco.close();
+    }
+    const concorrentes = await Promise.all([trocar(token), trocar(token)]);
+    assert.deepEqual(concorrentes.map((resposta) => resposta.status).sort(), [200, 400]);
+    assert.equal((await trocar(token)).status, 400);
+    for (const cookie of [clienteA, sessaoAntiga]) {
+      assert.equal(await (await req("/cliente/sessao", { cookie })).json(), null);
+    }
+    assert.match((await entrar("senha-de-teste")).headers.get("location"), /erro=credenciais/);
+    assert.equal((await entrar(senha)).headers.get("location"), "/");
+  });
+  await t.test("o cadastro solicita confirmação para o e-mail de recuperação informado", async () => {
+    const cadastrarComEmail = (email) => req("/cliente/cadastro", {
+      method: "POST",
+      dados: new URLSearchParams({
+        nome: "Cliente Novo", telefone: "11912340003", senha: "senha-de-teste", email,
+      }),
+    });
+    assert.match(await (await req("/cliente/cadastro")).text(), /name="email" type="email"/);
+    assert.match((await cadastrarComEmail("email-invalido")).headers.get("location"), /erro=email/);
+    const cadastro = await cadastrarComEmail("Novo@Example.test");
+    assert.equal(cadastro.headers.get("location"), "/cliente/email?estado=solicitado");
+    const cookie = cadastro.headers.get("set-cookie").split(";")[0];
+    const perfil = async () => (await req("/cliente/sessao", { cookie })).json();
+    assert.equal((await perfil()).email, null);
+
+    let texto;
+    for (let tentativa = 0; tentativa < 40 && !texto; tentativa++) {
+      texto = await readFile(mensagemCadastro, "utf8").catch((erro) => {
+        if (erro.code !== "ENOENT") throw erro;
+      });
+      if (!texto) await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.ok(texto, "O cadastro deve enviar a confirmação.");
+    const mensagem = JSON.parse(texto);
+    assert.deepEqual(mensagem.to, ["novo@example.test"]);
+    const link = new URL(mensagem.text.match(/https:\/\/[^\s]+/)[0]);
+    assert.equal(link.pathname, "/cliente/email/confirmar");
+    const confirmar = await req(link.pathname, {
+      method: "POST", dados: new URLSearchParams({ token: link.hash.slice(1) }),
+    });
+    assert.match(confirmar.headers.get("location"), /estado=verificado/);
+    assert.equal((await perfil()).email, "novo@example.test");
   });
 });

@@ -1,0 +1,101 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recuperar senha</title>
+    <link rel="stylesheet" href="/estilos.css" />
+  </head>
+  <body class="pagina-cliente">
+    <main class="cartao cliente-cartao">
+      <div class="cliente-capa">
+        <p class="marca">Barbearia</p>
+        <h1>Recuperar <span>senha</span></h1>
+      </div>
+      <div class="cliente-conteudo">
+        <p id="mensagem" role="status"></p>
+        <form id="pedir-link" action="/cliente/recuperar-senha" method="post" class="campos-formulario" hidden>
+          <p>Informe o e-mail de recuperação que você confirmou na sua conta.</p>
+          <p>
+            <label for="email">E-mail de recuperação</label>
+            <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required />
+          </p>
+          <button class="botao-principal" type="submit">Enviar link</button>
+        </form>
+        <form id="trocar-senha" action="/cliente/recuperar-senha/redefinir" method="post" class="campos-formulario" hidden>
+          <input id="token" name="token" type="hidden" />
+          <p>
+            <label for="senha">Nova senha (mínimo de 8 caracteres)</label>
+            <input id="senha" name="senha" type="password" autocomplete="new-password" minlength="8" maxlength="128" required />
+          </p>
+          <p>
+            <label for="confirmacao">Confirme a nova senha</label>
+            <input id="confirmacao" name="confirmacao" type="password" autocomplete="new-password" minlength="8" maxlength="128" required />
+          </p>
+          <button class="botao-principal" type="submit">Salvar nova senha</button>
+        </form>
+        <p id="pedir-outro" hidden><a href="/cliente/recuperar-senha">Solicitar outro link</a></p>
+        <p><a href="/cliente/login">Voltar para o login</a></p>
+      </div>
+    </main>
+    <script type="module" src="/tema.js"></script>
+    <script>
+      const mensagem = document.querySelector("#mensagem");
+      const troca = document.querySelector("#trocar-senha");
+      const redefinindo = location.pathname.endsWith("/redefinir");
+      document.querySelector("#pedir-link").hidden = redefinindo;
+      document.querySelector("#pedir-outro").hidden = !redefinindo;
+
+      if (redefinindo) {
+        // O fragmento não é enviado ao servidor. Só o POST inclui o token.
+        const token = location.hash.slice(1);
+        if (token) history.replaceState(null, "", location.pathname + location.search);
+        if (/^[A-Za-z0-9_-]{43}$/.test(token)) {
+          document.querySelector("#token").value = token;
+          troca.hidden = false;
+        } else {
+          mensagem.dataset.estado = "erro";
+          mensagem.textContent = "Abra o link completo recebido no e-mail ou solicite outro.";
+        }
+      } else {
+        const estado = new URLSearchParams(location.search).get("estado");
+        const avisos = new Map([
+          ["solicitado", "Se esse e-mail estiver confirmado em uma conta, você receberá um link válido por 15 minutos."],
+          ["email", "Informe um endereço de e-mail válido."],
+          ["indisponivel", "O envio por e-mail está indisponível no momento."],
+        ]);
+        if (avisos.has(estado)) {
+          if (estado !== "solicitado") mensagem.dataset.estado = "erro";
+          mensagem.textContent = avisos.get(estado);
+        }
+      }
+
+      // Mostra erros no formulário sem perder o token até concluir a troca.
+      troca.addEventListener("submit", async (evento) => {
+        evento.preventDefault();
+        const botao = troca.querySelector("button");
+        botao.disabled = true;
+        delete mensagem.dataset.estado;
+        mensagem.textContent = "Alterando senha...";
+        try {
+          const resposta = await fetch(troca.action, {
+            method: "POST",
+            body: new URLSearchParams(new FormData(troca)),
+          });
+          const dados = await resposta.json();
+          if (resposta.ok) {
+            location.assign("/cliente/login?estado=senha-alterada");
+            return;
+          }
+          mensagem.dataset.estado = "erro";
+          mensagem.textContent = dados.mensagem;
+        } catch {
+          mensagem.dataset.estado = "erro";
+          mensagem.textContent = "Não foi possível alterar a senha agora.";
+        } finally {
+          botao.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
