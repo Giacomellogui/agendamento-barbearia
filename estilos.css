@@ -369,6 +369,7 @@ button:enabled { cursor: pointer; }
   overflow-wrap: anywhere;
 }
 
+/* Cartão de identificação do cliente após o login. */
 .conta-cliente {
   display: flex;
   align-items: center;
@@ -550,6 +551,7 @@ button:enabled { cursor: pointer; }
   background: var(--fundo);
 }
 
+/* Fixa as abas na base da tela e respeita a área segura do celular. */
 .agenda-navegacao {
   position: fixed;
   inset: auto 0 0;
@@ -607,6 +609,7 @@ button:enabled { cursor: pointer; }
     radial-gradient(circle, currentColor 1px, transparent 1.5px) 1px 5px / 5px 5px;
 }
 
+/* Estilo compartilhado pelas listas de próximos atendimentos e histórico. */
 .agenda-historico {
   display: grid;
   gap: 10px;
@@ -801,3 +804,39 @@ button:enabled { cursor: pointer; }
 
   .login-barbeiro-conteudo { align-self: center; }
 }
+
+/* Seções da agenda pessoal e controles do diálogo de reagendamento. */
+.agenda-secao-titulo {
+  margin: 22px 0 8px;
+  font-size: 1.05rem;
+}
+
+.agenda-vazio,
+#reserva-reagendar { color: var(--suave); }
+
+.agenda-acoes-reserva {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.agenda-acoes-reserva .botao-principal { width: auto; }
+.agenda-dialogo {
+  box-sizing: border-box;
+  width: min(calc(100% - 24px), 28rem);
+  max-height: calc(100% - 24px);
+  padding: 20px;
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  background: var(--cartao);
+  color: var(--texto);
+}
+.agenda-dialogo::backdrop { background: #000a; }
+.agenda-dialogo h2 { margin: 0; }
+.agenda-dialogo fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+#mensagem-historico:empty,
+#situacao-reagendar:empty { margin: 0; }
+#mensagem-historico[data-estado="sucesso"] { color: light-dark(#195b32, #b5ebc8); }
+#mensagem-historico[data-estado="erro"],
+#situacao-reagendar[data-estado="erro"] { color: light-dark(#8f2525, #ffd0cc); }

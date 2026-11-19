@@ -13,6 +13,7 @@
         <h1>Criar <span>conta</span></h1>
       </div>
       <div class="cliente-conteudo">
+        <!-- Envia nome completo, telefone com DDD e senha para criar a conta. -->
         <form action="/cliente/cadastro" method="post" class="campos-formulario">
           <p><label for="nome">Nome completo</label>
             <input id="nome" name="nome" autocomplete="name" maxlength="100" required /></p>
@@ -28,6 +29,7 @@
     </main>
     <script type="module" src="/tema.js"></script>
     <script>
+      // Informa se há dados inválidos ou se o telefone já está cadastrado.
       const erro = new URLSearchParams(location.search).get("erro");
       const mensagem = document.querySelector("#mensagem");
       if (erro === "dados" || erro === "telefone") {

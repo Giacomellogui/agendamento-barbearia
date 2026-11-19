@@ -22,6 +22,7 @@
           <a href="/cliente/login">Entrar para reservar</a>
           <a href="/cliente/cadastro">Criar conta</a>
         </div>
+        <!-- Exibe a conta ativa depois que o script consulta a sessão. -->
         <div class="conta-cliente" id="conta-cliente" hidden>
           <div class="conta-identidade">
             <span class="conta-avatar" id="iniciais-cliente" aria-hidden="true"></span>
@@ -70,12 +71,38 @@
           </fieldset>
         </form>
         </section>
+        <!-- O script divide as reservas em próximos agendamentos e histórico. -->
         <section id="minha-agenda" aria-labelledby="titulo-minha-agenda" hidden>
           <h1 id="titulo-minha-agenda">Minha agenda</h1>
           <p id="situacao-historico" role="status"></p>
+          <p id="mensagem-historico" role="status"></p>
+          <h2 class="agenda-secao-titulo">Próximos agendamentos</h2>
+          <p id="proximos-vazio" class="agenda-vazio" hidden>Nenhum agendamento futuro.</p>
+          <ul id="proximos-agendamentos" class="agenda-historico"></ul>
+          <h2 class="agenda-secao-titulo">Histórico</h2>
+          <p id="historico-vazio" class="agenda-vazio" hidden>Nenhum agendamento passado ou cancelado.</p>
           <ul id="historico" class="agenda-historico"></ul>
         </section>
     </main>
+    <!-- O diálogo consulta horários disponíveis para uma reserva existente. -->
+    <dialog id="dialogo-reagendar" class="agenda-dialogo" aria-labelledby="titulo-reagendar">
+      <form id="form-reagendar" class="campos-formulario">
+        <h2 id="titulo-reagendar">Reagendar</h2>
+        <p id="reserva-reagendar"></p>
+        <fieldset id="campos-reagendar">
+          <p><label for="data-reagendar">Nova data</label>
+            <input id="data-reagendar" type="date" required /></p>
+          <p><label for="hora-reagendar">Novo horário</label>
+            <select id="hora-reagendar" required disabled></select></p>
+          <div class="agenda-acoes-reserva">
+            <button id="fechar-reagendar" class="botao-secundario" type="button">Voltar</button>
+            <button id="salvar-reagendar" class="botao-principal" type="submit" disabled>Salvar horário</button>
+          </div>
+        </fieldset>
+        <p id="situacao-reagendar" role="status"></p>
+      </form>
+    </dialog>
+    <!-- Os links mudam a seção visível e permitem usar o botão Voltar do navegador. -->
     <nav class="agenda-navegacao" aria-label="Área do cliente">
       <div class="agenda-navegacao-links">
         <a id="link-agendar" href="#agendar" aria-current="page">

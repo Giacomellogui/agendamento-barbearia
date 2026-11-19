@@ -15,6 +15,7 @@ const data = document.querySelector<HTMLInputElement>("#data")!;
 const mensagem = document.querySelector<HTMLParagraphElement>("#mensagem")!;
 const situacao = document.querySelector<HTMLParagraphElement>("#situacao")!;
 const lista = document.querySelector<HTMLUListElement>("#reservas")!;
+// Mostra a contagem de reservas da data consultada.
 const totalReservas = document.querySelector<HTMLParagraphElement>("#total-reservas")!;
 const hoje = new Date();
 const doisDigitos = (valor: number) => String(valor).padStart(2, "0");
@@ -142,6 +143,7 @@ function mensagemErro(erro: unknown) {
   return erro instanceof Error ? erro.message : "Não foi possível concluir a operação.";
 }
 
+// Carrega os dias e horários cadastrados antes de habilitar o formulário.
 const formExpediente = document.querySelector<HTMLFormElement>("#form-expediente")!;
 const camposExpediente = formExpediente.querySelector("fieldset")!;
 const diasExpediente = Array.from(formExpediente.querySelectorAll<HTMLInputElement>('[name="dia"]'));
@@ -192,6 +194,7 @@ const duracaoServico = formServico.querySelector<HTMLInputElement>('[name="durac
 const precoServico = formServico.querySelector<HTMLInputElement>('[name="preco"]')!;
 const catalogo = new Map<string, Servico>();
 
+// Mantém o seletor e os dados de edição sincronizados com a resposta da API.
 function atualizarCatalogo(servico: Servico) {
   const id = String(servico.id);
   const opcao = Array.from(seletorServico.options).find((item) => item.value === id);
@@ -213,6 +216,7 @@ seletorServico.addEventListener("change", () => {
   estadoFormulario(formServico, "");
 });
 
+// Usa POST para criar e PUT para editar, enviando o preço em centavos.
 formServico.addEventListener("submit", async (evento) => {
   evento.preventDefault();
   const id = seletorServico.value;

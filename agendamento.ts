@@ -1,10 +1,12 @@
-﻿type Servico = {
+﻿// Dados do catálogo usados nos cartões e na consulta de horários.
+type Servico = {
   id: number;
   nome: string;
   duracaoMinutos: number;
   precoCentavos: number | null;
 };
 
+// Confere se o HTML fornece o controle esperado para cada ID.
 function elemento<T extends HTMLElement>(id: string, tipo: new () => T) {
   const encontrado = document.getElementById(id);
   if (!(encontrado instanceof tipo)) throw new Error(`Elemento inválido: #${id}`);
@@ -33,7 +35,20 @@ const linkAgendar = elemento("link-agendar", HTMLAnchorElement);
 const linkHistorico = elemento("link-minha-agenda", HTMLAnchorElement);
 const historico = elemento("historico", HTMLUListElement);
 const situacaoHistorico = elemento("situacao-historico", HTMLParagraphElement);
+const proximos = elemento("proximos-agendamentos", HTMLUListElement);
+const proximosVazio = elemento("proximos-vazio", HTMLParagraphElement);
+const historicoVazio = elemento("historico-vazio", HTMLParagraphElement);
+const mensagemHistorico = elemento("mensagem-historico", HTMLParagraphElement);
+const dialogo = elemento("dialogo-reagendar", HTMLDialogElement);
+const formReagendar = elemento("form-reagendar", HTMLFormElement);
+const camposReagendar = elemento("campos-reagendar", HTMLFieldSetElement);
+const dataReagendar = elemento("data-reagendar", HTMLInputElement);
+const horaReagendar = elemento("hora-reagendar", HTMLSelectElement);
+const salvarReagendar = elemento("salvar-reagendar", HTMLButtonElement);
+const situacaoReagendar = elemento("situacao-reagendar", HTMLParagraphElement);
+const reservaReagendar = elemento("reserva-reagendar", HTMLParagraphElement);
 
+// Estado das escolhas do cliente e do mês visível no calendário.
 const hoje = new Date();
 const primeiroMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
 let mesVisivel = primeiroMes;
@@ -49,11 +64,13 @@ const dataCurta = new Intl.DateTimeFormat("pt-BR");
 const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 type ReservaCliente = {
+  id: number;
   data: string;
   inicio: number;
   fim: number;
   servico: string;
   cancelada: boolean;
+  editavel: boolean;
 };
 
 function horaFormatada(minutos: number) {
@@ -63,11 +80,125 @@ function horaFormatada(minutos: number) {
 }
 
 let consultaHistorico: AbortController | undefined;
+let consultaReagendar: AbortController | undefined;
+let reservaSelecionada: ReservaCliente | undefined;
+
+function aviso(area: HTMLElement, mensagem: string, sucesso: boolean) {
+  area.textContent = mensagem;
+  area.dataset.estado = sucesso ? "sucesso" : "erro";
+}
+
+function rotaReserva(reserva: ReservaCliente) {
+  return `/cliente/agendamentos/${reserva.id}`;
+}
+
+// Pede confirmação e atualiza o histórico e as vagas depois do cancelamento.
+async function cancelarAgendamento(reserva: ReservaCliente, botao: HTMLButtonElement) {
+  if (!window.confirm(`Cancelar a reserva de ${reserva.servico}?`)) return;
+  botao.disabled = true;
+  try {
+    const resposta = await fetch(rotaReserva(reserva), { method: "DELETE" });
+    const resultado: { mensagem: string } = await resposta.json();
+    aviso(mensagemHistorico, resultado.mensagem, resposta.ok);
+    if (resposta.ok || resposta.status === 404 || resposta.status === 401) await carregarHistorico();
+    if (resposta.ok) void atualizarHorarios();
+  } catch {
+    aviso(mensagemHistorico, "Não foi possível cancelar o agendamento.", false);
+  } finally {
+    botao.disabled = false;
+  }
+}
+
+// Busca vagas para a nova data e cancela consultas anteriores.
+async function carregarHorariosReagendamento() {
+  consultaReagendar?.abort();
+  horaReagendar.replaceChildren(new Option("Selecione um horário", ""));
+  horaReagendar.disabled = true;
+  salvarReagendar.disabled = true;
+  if (!reservaSelecionada || !dataReagendar.value || !dataReagendar.validity.valid) {
+    situacaoReagendar.textContent = "";
+    return;
+  }
+  const pedido = new AbortController();
+  consultaReagendar = pedido;
+  situacaoReagendar.textContent = "Carregando horários...";
+  try {
+    const parametros = new URLSearchParams({ data: dataReagendar.value });
+    const resposta = await fetch(`${rotaReserva(reservaSelecionada)}?${parametros}`, { signal: pedido.signal });
+    if (!resposta.ok) throw new Error();
+    const opcoes: string[] = await resposta.json();
+    if (pedido.signal.aborted) return;
+    opcoes.forEach((hora) => horaReagendar.add(new Option(hora, hora)));
+    horaReagendar.disabled = !opcoes.length;
+    situacaoReagendar.textContent = opcoes.length ? "" : "Nenhum outro horário disponível nesta data.";
+  } catch {
+    if (!pedido.signal.aborted) situacaoReagendar.textContent = "Não foi possível consultar os horários desta reserva.";
+  }
+}
+
+// Abre o diálogo na data atual da reserva para permitir a troca só de horário.
+function abrirReagendamento(reserva: ReservaCliente) {
+  reservaSelecionada = reserva;
+  reservaReagendar.textContent = reserva.servico;
+  delete situacaoReagendar.dataset.estado;
+  dataReagendar.min = dataIso(new Date());
+  dataReagendar.value = reserva.data;
+  dialogo.showModal();
+  void carregarHorariosReagendamento();
+}
+
+elemento("fechar-reagendar", HTMLButtonElement).addEventListener("click", () => dialogo.close());
+dialogo.addEventListener("close", () => {
+  consultaReagendar?.abort();
+  reservaSelecionada = undefined;
+});
+dialogo.addEventListener("cancel", (evento) => {
+  if (camposReagendar.disabled) evento.preventDefault();
+});
+dataReagendar.addEventListener("change", () => {
+  delete situacaoReagendar.dataset.estado;
+  void carregarHorariosReagendamento();
+});
+horaReagendar.addEventListener("change", () => { salvarReagendar.disabled = !horaReagendar.value; });
+
+// Envia o novo horário e atualiza as duas abas após o sucesso.
+formReagendar.addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  if (!reservaSelecionada || !horaReagendar.value || camposReagendar.disabled) return;
+  camposReagendar.disabled = true;
+  try {
+    const resposta = await fetch(rotaReserva(reservaSelecionada), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: dataReagendar.value, horario: horaReagendar.value }),
+    });
+    const resultado: { mensagem: string } = await resposta.json();
+    if (resposta.ok) {
+      dialogo.close();
+      aviso(mensagemHistorico, resultado.mensagem, true);
+      await carregarHistorico();
+      void atualizarHorarios();
+    } else {
+      if (resposta.status === 409 || resposta.status === 400) await carregarHorariosReagendamento();
+      if (resposta.status === 401 || resposta.status === 404) salvarReagendar.disabled = true;
+      aviso(situacaoReagendar, resultado.mensagem, false);
+    }
+  } catch {
+    aviso(situacaoReagendar, "Não foi possível reagendar. Tente novamente.", false);
+  } finally {
+    camposReagendar.disabled = false;
+  }
+});
+
+// Divide as reservas entre próximos atendimentos e histórico. A API decide quais são editáveis.
 async function carregarHistorico() {
   consultaHistorico?.abort();
   const pedido = new AbortController();
   consultaHistorico = pedido;
   historico.replaceChildren();
+  proximos.replaceChildren();
+  proximosVazio.hidden = true;
+  historicoVazio.hidden = true;
   situacaoHistorico.textContent = "Carregando sua agenda...";
   try {
     const resposta = await fetch("/cliente/agendamentos", { signal: pedido.signal });
@@ -96,9 +227,29 @@ async function carregarHistorico() {
       status.dataset.estado = estado;
       status.textContent = estado;
       item.append(nome, horario, status);
-      historico.append(item);
+      if (reserva.editavel) {
+        const acoes = document.createElement("div");
+        acoes.className = "agenda-acoes-reserva";
+        const reagendar = document.createElement("button");
+        reagendar.type = "button";
+        reagendar.className = "botao-secundario";
+        reagendar.textContent = "Reagendar";
+        reagendar.addEventListener("click", () => abrirReagendamento(reserva));
+        const cancelar = document.createElement("button");
+        cancelar.type = "button";
+        cancelar.className = "botao-secundario";
+        cancelar.textContent = "Cancelar";
+        cancelar.addEventListener("click", () => void cancelarAgendamento(reserva, cancelar));
+        acoes.append(reagendar, cancelar);
+        item.append(acoes);
+      }
+      // A API retorna os mais recentes primeiro. Inserir no início inverte só a lista futura.
+      if (!reserva.cancelada && fim > agora) proximos.prepend(item);
+      else historico.append(item);
     }
-    situacaoHistorico.textContent = reservas.length ? "" : "Você ainda não tem agendamentos.";
+    situacaoHistorico.textContent = "";
+    proximosVazio.hidden = proximos.childElementCount > 0;
+    historicoVazio.hidden = historico.childElementCount > 0;
   } catch {
     if (!pedido.signal.aborted) situacaoHistorico.textContent = "Não foi possível carregar sua agenda. Tente abrir a aba novamente.";
   }
@@ -117,6 +268,7 @@ function sincronizarAba() {
   else {
     consultaHistorico?.abort();
     historico.replaceChildren();
+    proximos.replaceChildren();
   }
 }
 
@@ -137,6 +289,7 @@ function atualizarBotao() {
   confirmar.disabled = !clienteLogado || !servicoSelecionado || !horarioSelecionado;
 }
 
+// Mostra o nome, as iniciais e a opção de sair quando há sessão ativa.
 function mostrarSessao(nome: string | null) {
   clienteLogado = nome !== null;
   acessoCliente.hidden = clienteLogado;
@@ -195,6 +348,7 @@ function mudarMes(delta: number) {
 mesAnterior.addEventListener("click", () => mudarMes(-1));
 mesSeguinte.addEventListener("click", () => mudarMes(1));
 
+// Usa botões de rádio para seleção única e navegação por teclado.
 function criarOpcao(grupo: string, valor: string) {
   const rotulo = document.createElement("label");
   const entrada = document.createElement("input");
@@ -243,6 +397,7 @@ async function atualizarHorarios() {
   }
 }
 
+// Exibe cartões com duração e preço em reais, quando cadastrado.
 async function carregarServicos() {
   const resposta = await fetch("/servicos");
   if (!resposta.ok) throw new Error();
@@ -266,6 +421,7 @@ async function carregarServicos() {
   }
 }
 
+// Envia a reserva para o servidor validar a sessão e a disponibilidade.
 formulario.addEventListener("submit", async (evento) => {
   evento.preventDefault();
   if (campos.disabled || !clienteLogado || !servicoSelecionado || !horarioSelecionado) return;

@@ -13,6 +13,7 @@
         <h1>Entrar na sua <span>conta</span></h1>
       </div>
       <div class="cliente-conteudo">
+        <!-- Envia telefone e senha para abrir a sessão do cliente. -->
         <form action="/cliente/login" method="post" class="campos-formulario">
           <p><label for="telefone">Telefone com DDD</label>
             <input id="telefone" name="telefone" type="tel" autocomplete="username" maxlength="24" required /></p>
@@ -26,6 +27,7 @@
     </main>
     <script type="module" src="/tema.js"></script>
     <script>
+      // Exibe a mensagem correspondente ao redirecionamento do servidor.
       const erro = new URLSearchParams(location.search).get("erro");
       if (erro === "credenciais" || erro === "dados") {
         const mensagem = document.querySelector("#mensagem");

@@ -35,7 +35,7 @@ seletor?.addEventListener("change", () => {
   }
 });
 
-// Sincroniza a preferência quando ela muda em outra aba.
+// O evento de armazenamento sincroniza a preferência entre abas da mesma origem.
 window.addEventListener("storage", (evento) => {
   if (evento.key === chave || evento.key === null) {
     preferencia = evento.newValue;

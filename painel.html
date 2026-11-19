@@ -27,6 +27,7 @@
         <h1>Painel do barbeiro</h1>
         <a href="/">Área do cliente <span aria-hidden="true">↗</span></a>
       </div>
+      <!-- A agenda e as configurações ficam em colunas quando há espaço. -->
       <div class="painel-colunas">
         <section class="painel-bloco painel-agenda" aria-labelledby="titulo-agenda">
           <div class="painel-agenda-cabecalho">
@@ -46,6 +47,7 @@
         </section>
         <section class="painel-bloco painel-configuracoes" aria-labelledby="titulo-configuracoes">
           <h2 id="titulo-configuracoes">Configurações</h2>
+          <!-- As configurações começam recolhidas. Os campos só são liberados depois de carregar os dados. -->
           <details class="configuracao-painel">
             <summary>Expediente</summary>
             <form id="form-expediente" class="campos-formulario">
