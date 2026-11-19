@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync } from "node:fs";
 import { atenderAgenda } from "./servidor/agenda.ts";
 import { atenderAutenticacao, autenticado, clienteAutenticado } from "./servidor/autenticacao.ts";
@@ -15,7 +15,7 @@ const painel = readFileSync(new URL("./painel.html", import.meta.url));
 const scriptPainel = readFileSync(new URL("./painel.js", import.meta.url));
 
 // Cada rota combina o método HTTP com o caminho pedido pelo navegador.
-const servidor = createServer(async (req, res) => {
+async function atender(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   if (await atenderAutenticacao(req, res, url) || await atenderAgenda(req, res, url)) return;
   if (req.method === "GET" && url.pathname === "/avisos-whatsapp") {
@@ -24,12 +24,12 @@ const servidor = createServer(async (req, res) => {
       responderJson(res, 401, { mensagem: "Entre no painel para ver os avisos." });
       return;
     }
-    responderJson(res, 200, estadoDosAvisos());
+    responderJson(res, 200, await estadoDosAvisos());
     return;
   }
   // Entrega a página de agendamento e os arquivos usados pelo navegador.
   if (req.method === "GET" && url.pathname === "/") {
-    if (!clienteAutenticado(req)) {
+    if (!await clienteAutenticado(req)) {
       redirecionar(res, "/cliente/login");
       return;
     }
@@ -75,13 +75,23 @@ const servidor = createServer(async (req, res) => {
 
   res.statusCode = 404;
   res.end("Rota desconhecida");
+}
+
+const servidor = createServer((req, res) => {
+  void atender(req, res).catch(() => {
+    console.error("Não foi possível processar uma requisição.");
+    if (res.headersSent) res.end();
+    else responderJson(res, 500, { mensagem: "Não foi possível concluir a operação. Tente novamente." });
+  });
 });
 
-// Escuta apenas no endereço local deste computador.
-servidor.listen(Number(process.env.AGENDA_PORT ?? 3000), "127.0.0.1", () => {
+// O Render injeta PORT. Sem essa variável, o acesso continua restrito ao computador local.
+const host = process.env.AGENDA_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
+const porta = Number(process.env.AGENDA_PORT ?? process.env.PORT ?? 3000);
+servidor.listen(porta, host, () => {
   const endereco = servidor.address();
   if (endereco && typeof endereco === "object") {
-    console.log(`Servidor rodando em http://127.0.0.1:${endereco.port}`);
+    console.log(`Servidor rodando em http://${host}:${endereco.port}`);
   }
   iniciarAvisos();
 });

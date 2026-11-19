@@ -6,6 +6,7 @@ export const enfileirarAviso = banco.prepare(`
 const proximoAviso = banco.prepare(
   "SELECT * FROM avisos_whatsapp WHERE estado <> 'aceito' AND proxima_tentativa <= ? ORDER BY id LIMIT 1",
 );
+const reservarTentativa = banco.prepare("UPDATE avisos_whatsapp SET proxima_tentativa = ? WHERE id = ?");
 const aceitarAviso = banco.prepare("UPDATE avisos_whatsapp SET estado = 'aceito', erro = NULL WHERE id = ?");
 const adiarAviso = banco.prepare(`
   UPDATE avisos_whatsapp SET estado = 'falha', erro = ?, tentativas = tentativas + 1, proxima_tentativa = ? WHERE id = ?
@@ -29,8 +30,8 @@ const whatsappInvalidos = [
 ].filter(([valido]) => !valido).map(([, nome]) => nome);
 export const whatsappConfigurado = whatsappInvalidos.length === 0;
 
-export function estadoDosAvisos() {
-  return { configurado: whatsappConfigurado, avisos: listarAvisos.all() };
+export async function estadoDosAvisos() {
+  return { configurado: whatsappConfigurado, avisos: await listarAvisos.all() };
 }
 
 function enviarModelo(destinatario: string, nome: string, components: unknown[]) {
@@ -54,7 +55,13 @@ export async function enviarAvisos() {
   enviandoAvisos = true;
   try {
     for (let enviados = 0; enviados < 10; enviados++) {
-      const aviso = proximoAviso.get(Date.now());
+      // Reserva a tentativa antes de chamar a Meta. Outro processo pode retomá-la após expirar.
+      const aviso = await banco.transacao(async () => {
+        const agora = Date.now();
+        const item = await proximoAviso.get(agora);
+        if (item) await reservarTentativa.run(agora + 120000, item.id);
+        return item;
+      });
       if (!aviso) break;
       let erro = "Falha de conexão com a Meta.";
       try {
@@ -84,15 +91,17 @@ export async function enviarAvisos() {
           erro = "Resposta sem confirmação da Meta.";
           throw new Error(erro);
         }
-        aceitarAviso.run(aviso.id);
+        await aceitarAviso.run(aviso.id);
         console.info(`WhatsApp aceitou o aviso da reserva #${aviso.reserva_id}. Confira a entrega no celular.`);
       } catch {
         // Aumenta o intervalo entre tentativas após falhas, até o limite de uma hora.
         const espera = Math.min(3600, 30 * 2 ** Math.min(Number(aviso.tentativas), 7));
-        adiarAviso.run(erro, Date.now() + espera * 1000, aviso.id);
+        await adiarAviso.run(erro, Date.now() + espera * 1000, aviso.id);
         console.warn("Aviso de reagendamento pendente no WhatsApp. Confira a configuração e a conexão.");
       }
     }
+  } catch {
+    console.warn("Não foi possível consultar ou atualizar a fila do WhatsApp.");
   } finally {
     enviandoAvisos = false;
   }

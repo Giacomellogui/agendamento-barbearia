@@ -14,6 +14,8 @@ const paginaEmail = readFileSync(new URL("../email-cliente.html", import.meta.ur
 // A senha vem do ambiente. A sessão fica em memória e expira após oito horas.
 const senha = process.env.BARBEIRO_SENHA;
 const duracaoSessao = 8 * 60 * 60;
+const cookieSeguro = process.env.RENDER === "true" || process.env.APP_BASE_URL?.startsWith("https://")
+  ? "; Secure" : "";
 let sessao: { token: string; expira: number } | undefined;
 
 // Produz um valor de tamanho fixo para a comparação da senha do barbeiro.
@@ -30,14 +32,14 @@ export function autenticado(req: IncomingMessage) {
 }
 
 // A consulta de sessão retorna o perfil. O hash e o salt são usados no login.
-const clientePorId = banco.prepare("SELECT id, nome, telefone, email_verificado FROM clientes WHERE id = ?");
+const clientePorId = banco.prepare("SELECT id, nome, telefone, email_verificado, hash FROM clientes WHERE id = ?");
 const clientePorTelefone = banco.prepare("SELECT id, salt, hash FROM clientes WHERE telefone = ?");
 const inserirCliente = banco.prepare(`
   INSERT INTO clientes (nome, telefone, salt, hash) VALUES (?, ?, ?, ?)
   ON CONFLICT(telefone) DO NOTHING RETURNING id
 `);
 const derivarSenha = promisify(scrypt);
-const sessoesClientes = new Map<string, { id: number; expira: number }>();
+const sessoesClientes = new Map<string, { id: number; hash: string; expira: number }>();
 const caminhoRecuperacao = "/cliente/recuperar-senha";
 const caminhoEmail = "/cliente/email";
 const janelaEnvios = 15 * 60_000;
@@ -51,9 +53,9 @@ const emitirLink = banco.prepare(`
   ON CONFLICT(cliente_id, tipo) DO UPDATE SET
     email = excluded.email, digest = excluded.digest, expira_em = excluded.expira_em,
     solicitado_em = excluded.solicitado_em,
-    envios = CASE WHEN janela_inicio <= ? THEN 1 ELSE envios + 1 END,
-    janela_inicio = CASE WHEN janela_inicio <= ? THEN excluded.janela_inicio ELSE janela_inicio END
-  WHERE solicitado_em <= ? AND (janela_inicio <= ? OR envios < 3)
+    envios = CASE WHEN links_cliente.janela_inicio <= ? THEN 1 ELSE links_cliente.envios + 1 END,
+    janela_inicio = CASE WHEN links_cliente.janela_inicio <= ? THEN excluded.janela_inicio ELSE links_cliente.janela_inicio END
+  WHERE links_cliente.solicitado_em <= ? AND (links_cliente.janela_inicio <= ? OR links_cliente.envios < 3)
 `);
 const consultarLink = banco.prepare("SELECT cliente_id, email FROM links_cliente WHERE tipo = ? AND digest = ? AND expira_em > ?");
 const invalidarLink = banco.prepare("UPDATE links_cliente SET digest = NULL WHERE digest = ?");
@@ -89,15 +91,16 @@ async function solicitarLink(id: number, email: string, tipo: "verificacao" | "r
   const digest = hashSenha(token).toString("hex");
   const verificando = tipo === "verificacao";
   const validade = verificando ? 60 * 60_000 : 15 * 60_000;
-  if (!emitirLink.run(id, tipo, email, digest, agora + validade, agora, agora,
-    inicioJanela, inicioJanela, agora - 60_000, inicioJanela).changes) return;
+  const emitido = await emitirLink.run(id, tipo, email, digest, agora + validade, agora, agora,
+    inicioJanela, inicioJanela, agora - 60_000, inicioJanela);
+  if (!emitido.changes) return;
   try {
     const caminho = verificando ? caminhoEmail + "/confirmar" : caminhoRecuperacao + "/redefinir";
     if (await enviarLinkPorEmail(email, caminho, token, verificando)) return;
   } catch {
     // O endereço, o token e o conteúdo do provedor ficam fora do log.
   }
-  invalidarLink.run(digest);
+  await invalidarLink.run(digest);
   console.warn("Não foi possível enviar um e-mail de acesso. Confira as credenciais e o remetente.");
 }
 
@@ -106,31 +109,23 @@ function digestLink(token: string | null) {
 }
 
 // A mudança e o consumo do link são atômicos. A operação também revalida a expiração.
-function concluirLink(tipo: "verificacao" | "recuperacao", digest: string, atualizar: (id: number, email: string) => boolean) {
-  banco.exec("BEGIN IMMEDIATE");
-  try {
-    const link = consultarLink.get(tipo, digest, Date.now());
-    if (!link || !atualizar(Number(link.cliente_id), String(link.email))) {
-      banco.exec("ROLLBACK");
-      return undefined;
-    }
+function concluirLink(tipo: "verificacao" | "recuperacao", digest: string, atualizar: (id: number, email: string) => Promise<boolean>) {
+  return banco.transacao(async () => {
+    const link = await consultarLink.get(tipo, digest, Date.now());
+    if (!link || !await atualizar(Number(link.cliente_id), String(link.email))) return undefined;
     const id = Number(link.cliente_id);
     // Descarta links antigos após trocar a senha ou confirmar um novo e-mail.
-    invalidarLinksCliente.run(id);
-    banco.exec("COMMIT");
+    await invalidarLinksCliente.run(id);
     return id;
-  } catch (erro) {
-    banco.exec("ROLLBACK");
-    throw erro;
-  }
+  });
 }
 
 async function redefinirSenha(digest: string, senhaNova: string) {
-  if (!digest || !consultarLink.get("recuperacao", digest, Date.now())) return false;
+  if (!digest || !await consultarLink.get("recuperacao", digest, Date.now())) return false;
   const salt = randomBytes(16).toString("hex");
   const hash = await derivarSenha(senhaNova, salt, 64) as Buffer;
-  const id = concluirLink("recuperacao", digest, (clienteId, email) =>
-    Boolean(atualizarSenha.run(salt, hash.toString("hex"), clienteId, email).changes));
+  const id = await concluirLink("recuperacao", digest, async (clienteId, email) =>
+    Boolean((await atualizarSenha.run(salt, hash.toString("hex"), clienteId, email)).changes));
   if (id === undefined) return false;
   for (const [token, sessao] of sessoesClientes) {
     if (sessao.id === id) sessoesClientes.delete(token);
@@ -150,23 +145,26 @@ function tokenCliente(req: IncomingMessage) {
   return req.headers.cookie?.match(/(?:^|;\s*)sessao_cliente=([a-f0-9]{64})(?:;|$)/)?.[1] ?? "";
 }
 
-export function clienteAutenticado(req: IncomingMessage) {
+export async function clienteAutenticado(req: IncomingMessage) {
   const token = tokenCliente(req);
   const cliente = sessoesClientes.get(token);
-  if (cliente && Date.now() < cliente.expira) return clientePorId.get(cliente.id);
+  if (cliente && Date.now() < cliente.expira) {
+    const perfil = await clientePorId.get(cliente.id);
+    if (perfil?.hash === cliente.hash && sessoesClientes.get(token) === cliente) return perfil;
+  }
   sessoesClientes.delete(token);
 }
 
 // Gera um token aleatório e o envia em um cookie inacessível ao JavaScript.
-function iniciarSessaoCliente(req: IncomingMessage, res: ServerResponse, id: number) {
+function iniciarSessaoCliente(req: IncomingMessage, res: ServerResponse, id: number, hash: string) {
   const agora = Date.now();
   for (const [token, sessao] of sessoesClientes) {
     if (sessao.expira <= agora) sessoesClientes.delete(token);
   }
   sessoesClientes.delete(tokenCliente(req));
   const token = randomBytes(32).toString("hex");
-  sessoesClientes.set(token, { id, expira: agora + duracaoSessao * 1000 });
-  res.setHeader("Set-Cookie", `sessao_cliente=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${duracaoSessao}`);
+  sessoesClientes.set(token, { id, hash, expira: agora + duracaoSessao * 1000 });
+  res.setHeader("Set-Cookie", `sessao_cliente=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${duracaoSessao}${cookieSeguro}`);
 }
 
 
@@ -178,7 +176,7 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
   const rotaEmail = url.pathname === caminhoEmail || url.pathname === caminhoEmail + "/confirmar";
   const rotaRecuperacao = url.pathname === caminhoRecuperacao || url.pathname === caminhoRecuperacao + "/redefinir";
   if ((rotaEmail || rotaRecuperacao) && req.method === "GET") {
-    if (url.pathname === caminhoEmail && !clienteAutenticado(req)) {
+    if (url.pathname === caminhoEmail && !await clienteAutenticado(req)) {
       redirecionar(res, "/cliente/login");
       return true;
     }
@@ -204,14 +202,14 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
         // Dá a mesma resposta para e-mails verificados e endereços desconhecidos.
         redirecionar(res, caminhoRecuperacao + "?estado=solicitado");
         if (permitirSolicitacao(origem)) {
-          const cliente = clientePorEmail.get(email);
+          const cliente = await clientePorEmail.get(email);
           if (cliente) void solicitarLink(Number(cliente.id), email, "recuperacao").catch(consoleEmail);
         }
       }
       return true;
     }
     if (url.pathname === caminhoEmail) {
-      const cliente = clienteAutenticado(req);
+      const cliente = await clienteAutenticado(req);
       if (!cliente) {
         redirecionar(res, "/cliente/login");
         return true;
@@ -224,15 +222,15 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
       }
       // Alterar o endereço de recuperação exige revalidar a senha da conta.
       const id = Number(cliente.id);
-      const credencial = credencialPorId.get(id);
+      const credencial = await credencialPorId.get(id);
       const hash = credencial ? await derivarSenha(senhaAtual, String(credencial.salt), 64).catch(() => null) as Buffer | null : null;
       if (!hash || !credencial || !timingSafeEqual(hash, Buffer.from(String(credencial.hash), "hex")) ||
-          clienteAutenticado(req)?.id !== cliente.id || credencialPorId.get(id)?.hash !== credencial.hash) {
+          (await clienteAutenticado(req))?.id !== cliente.id || (await credencialPorId.get(id))?.hash !== credencial.hash) {
         redirecionar(res, caminhoEmail + "?estado=senha");
         return true;
       }
       redirecionar(res, caminhoEmail + "?estado=solicitado");
-      const existente = clientePorEmail.get(email);
+      const existente = await clientePorEmail.get(email);
       if (!existente && email !== cliente.email_verificado) {
         void solicitarLink(id, email, "verificacao").catch(consoleEmail);
       }
@@ -242,8 +240,8 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
     if (rotaEmail) {
       let confirmado = false;
       try {
-        confirmado = Boolean(digest && concluirLink("verificacao", digest, (id, destino) =>
-          Boolean(verificarEmail.run(destino, id, destino, id).changes)));
+        confirmado = Boolean(digest && await concluirLink("verificacao", digest, async (id, destino) =>
+          Boolean((await verificarEmail.run(destino, id, destino, id)).changes)));
       } catch {
         consoleEmail();
       }
@@ -257,7 +255,7 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
     }
     try {
       if (await redefinirSenha(digest, senhaNova)) {
-        res.setHeader("Set-Cookie", "sessao_cliente=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+        res.setHeader("Set-Cookie", `sessao_cliente=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${cookieSeguro}`);
         responderJson(res, 200, { mensagem: "Senha alterada." });
       } else {
         responderJson(res, 400, { mensagem: "Link inválido, expirado ou já usado. Solicite outro." });
@@ -296,7 +294,7 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
         redirecionar(res, "/cliente/cadastro?erro=email");
         return true;
       }
-      const cadastro = criandoConta ? undefined : clientePorTelefone.get(telefone);
+      const cadastro = criandoConta ? undefined : await clientePorTelefone.get(telefone);
       // Deriva a senha com scrypt e um salt armazenado junto à conta.
       const salt = cadastro ? String(cadastro.salt) : randomBytes(16).toString("hex");
       const hash = await derivarSenha(senhaCliente, salt, 64).catch(() => null) as Buffer | null;
@@ -305,29 +303,29 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
         return true;
       }
       if (criandoConta) {
-        const cliente = inserirCliente.get(nome, telefone, salt, hash.toString("hex"));
+        const cliente = await inserirCliente.get(nome, telefone, salt, hash.toString("hex"));
         if (!cliente) {
           redirecionar(res, "/cliente/cadastro?erro=telefone");
           return true;
         }
         const id = Number(cliente.id);
-        iniciarSessaoCliente(req, res, id);
+        iniciarSessaoCliente(req, res, id, hash.toString("hex"));
         if (emailRecuperacao) {
           // Cria a conta imediatamente e confirma o endereço em uma etapa separada.
           redirecionar(res, caminhoEmail + "?estado=" + (emailConfigurado ? "solicitado" : "indisponivel"));
           if (emailConfigurado && permitirSolicitacao(req.socket.remoteAddress ?? "local") &&
-              !clientePorEmail.get(emailRecuperacao)) {
+              !await clientePorEmail.get(emailRecuperacao)) {
             void solicitarLink(id, emailRecuperacao, "verificacao").catch(consoleEmail);
           }
           return true;
         }
       } else {
         if (!cadastro || !timingSafeEqual(hash, Buffer.from(String(cadastro.hash), "hex")) ||
-            clientePorTelefone.get(telefone)?.hash !== cadastro.hash) {
+            (await clientePorTelefone.get(telefone))?.hash !== cadastro.hash) {
           redirecionar(res, "/cliente/login?erro=credenciais");
           return true;
         }
-        iniciarSessaoCliente(req, res, Number(cadastro.id));
+        iniciarSessaoCliente(req, res, Number(cadastro.id), hash.toString("hex"));
       }
       redirecionar(res, "/");
       return true;
@@ -335,13 +333,13 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
   }
   if (url.pathname === "/cliente/sessao" && req.method === "GET") {
     res.setHeader("Cache-Control", "no-store");
-    const cliente = clienteAutenticado(req);
+    const cliente = await clienteAutenticado(req);
     responderJson(res, 200, cliente ? { nome: cliente.nome, email: cliente.email_verificado } : null);
     return true;
   }
   if (url.pathname === "/cliente/sair" && req.method === "POST") {
     sessoesClientes.delete(tokenCliente(req));
-    res.setHeader("Set-Cookie", "sessao_cliente=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+    res.setHeader("Set-Cookie", `sessao_cliente=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${cookieSeguro}`);
     redirecionar(res, "/");
     return true;
   }
@@ -363,14 +361,14 @@ export async function atenderAutenticacao(req: IncomingMessage, res: ServerRespo
       return true;
     }
     sessao = { token: randomBytes(32).toString("hex"), expira: Date.now() + duracaoSessao * 1000 };
-    res.setHeader("Set-Cookie", `sessao_barbearia=${sessao.token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${duracaoSessao}`);
+    res.setHeader("Set-Cookie", `sessao_barbearia=${sessao.token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${duracaoSessao}${cookieSeguro}`);
     redirecionar(res, "/painel");
     return true;
   }
   // Encerra a sessão e remove o cookie do navegador.
   if (url.pathname === "/sair" && req.method === "POST") {
     if (autenticado(req)) sessao = undefined;
-    res.setHeader("Set-Cookie", "sessao_barbearia=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+    res.setHeader("Set-Cookie", `sessao_barbearia=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${cookieSeguro}`);
     redirecionar(res, "/login");
     return true;
   }

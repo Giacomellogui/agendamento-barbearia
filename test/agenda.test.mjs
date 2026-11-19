@@ -7,17 +7,56 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
+import { randomUUID } from "node:crypto";
+import pg from "pg";
 
 test("regras da agenda pela API HTTP", { timeout: 15000 }, async (t) => {
   const pasta = await mkdtemp(join(tmpdir(), "barbearia-teste-"));
   const arquivoBanco = join(pasta, "agenda.sqlite");
+  const urlPostgresTeste = process.env.TEST_DATABASE_URL;
+  let servidor, fim, poolPostgres, esquema;
+  let conexaoPostgres;
+  let urlIsolada = "";
+  t.after(async () => {
+    try {
+      if (servidor) {
+        servidor.kill();
+        await fim;
+      }
+      await conexaoPostgres?.end();
+      if (poolPostgres && esquema) await poolPostgres.query(`DROP SCHEMA IF EXISTS ${esquema} CASCADE`);
+    } finally {
+      await poolPostgres?.end();
+      await rm(pasta, { recursive: true, force: true });
+    }
+  });
+  if (urlPostgresTeste) {
+    esquema = `barbearia_teste_${randomUUID().replaceAll("-", "")}`;
+    poolPostgres = new pg.Pool({ connectionString: urlPostgresTeste, connectionTimeoutMillis: 5000 });
+    await poolPostgres.query(`CREATE SCHEMA ${esquema}`);
+    const url = new URL(urlPostgresTeste);
+    url.searchParams.set("options", `-c search_path=${esquema}`);
+    urlIsolada = url.href;
+    conexaoPostgres = new pg.Pool({ connectionString: urlIsolada, connectionTimeoutMillis: 5000 });
+    const { rows } = await conexaoPostgres.query("SELECT current_schema() AS nome");
+    assert.equal(rows[0].nome, esquema, "O PostgreSQL deve usar o esquema isolado dos testes.");
+  }
+  async function consultarBanco(sql, ...parametros) {
+    if (conexaoPostgres) {
+      let indice = 0;
+      return (await conexaoPostgres.query(sql.replace(/\?/g, () => `$${++indice}`), parametros)).rows;
+    }
+    const banco = new DatabaseSync(arquivoBanco);
+    try { return banco.prepare(sql).all(...parametros); }
+    finally { banco.close(); }
+  }
   const arquivoEnv = join(pasta, ".env");
   await writeFile(arquivoEnv, "BARBEIRO_SENHA=senha-de-teste\n");
   const liberarMeta = join(pasta, "liberar-meta");
   const mensagemVerificacao = join(pasta, "email-verificacao.json");
   const mensagemCadastro = join(pasta, "email-cadastro.json");
   const mensagemRecuperacao = join(pasta, "email-recuperacao.json");
-  // Intercepta apenas chamadas à Meta. A API de agendamento roda normalmente via HTTP.
+  // Intercepta os provedores externos. A API de agendamento roda normalmente via HTTP.
   const metaSimulada = `
     import { existsSync, writeFileSync } from "node:fs";
     const fetchOriginal = globalThis.fetch;
@@ -42,31 +81,36 @@ test("regras da agenda pela API HTTP", { timeout: 15000 }, async (t) => {
   `;
   const ambiente = { ...process.env };
   delete ambiente.BARBEIRO_SENHA;
-  const servidor = spawn(process.execPath, [`--env-file-if-exists=${arquivoEnv}`,
-    "--import", `data:text/javascript,${encodeURIComponent(metaSimulada)}`, "server.ts"], {
-    env: { ...ambiente, AGENDA_DB: arquivoBanco, AGENDA_PORT: "0",
-      WHATSAPP_TOKEN: "token-simulado",
-      WHATSAPP_PHONE_NUMBER_ID: "1234", WHATSAPP_BARBEIRO_NUMERO: "5511912340000",
-      WHATSAPP_TEMPLATE: "reagendamento_teste", WHATSAPP_GRAPH_VERSION: "v27.0",
-      RESEND_API_KEY: "email-simulado", EMAIL_FROM: "Barbearia <agenda@example.test>",
-      APP_BASE_URL: "https://barbearia.example.test" },
-    stdio: ["ignore", "pipe", "inherit"],
-  });
-  const fim = once(servidor, "exit");
-  t.after(async () => {
-    servidor.kill();
-    await fim;
-    await rm(pasta, { recursive: true, force: true });
-  });
-  const url = await Promise.race([
-    (async () => {
-      for await (const linha of createInterface({ input: servidor.stdout })) {
-        const endereco = linha.match(/http:\/\/127\.0\.0\.1:\d+/)?.[0];
-        if (endereco) return endereco;
-      }
-    })(),
-    fim.then(([codigo]) => { throw new Error(`Servidor terminou com código ${codigo}`); }),
-  ]);
+  delete ambiente.AGENDA_HOST;
+  delete ambiente.AGENDA_PORT;
+  delete ambiente.PORT;
+  async function iniciarServidor() {
+    servidor = spawn(process.execPath, [`--env-file-if-exists=${arquivoEnv}`,
+      "--import", `data:text/javascript,${encodeURIComponent(metaSimulada)}`, "server.ts"], {
+      env: { ...ambiente, DATABASE_URL: urlIsolada, AGENDA_DB: arquivoBanco,
+        ...(urlPostgresTeste ? { PORT: "0" } : { AGENDA_PORT: "0" }),
+        WHATSAPP_TOKEN: "token-simulado",
+        WHATSAPP_PHONE_NUMBER_ID: "1234", WHATSAPP_BARBEIRO_NUMERO: "5511912340000",
+        WHATSAPP_TEMPLATE: "reagendamento_teste", WHATSAPP_GRAPH_VERSION: "v27.0",
+        RESEND_API_KEY: "email-simulado", EMAIL_FROM: "Barbearia <agenda@example.test>",
+        APP_BASE_URL: "https://barbearia.example.test" },
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    fim = once(servidor, "exit");
+    return Promise.race([
+      (async () => {
+        for await (const linha of createInterface({ input: servidor.stdout })) {
+          const endereco = linha.match(/http:\/\/(127\.0\.0\.1|0\.0\.0\.0):(\d+)/);
+          if (endereco) {
+            assert.equal(endereco[1], urlPostgresTeste ? "0.0.0.0" : "127.0.0.1");
+            return `http://127.0.0.1:${endereco[2]}`;
+          }
+        }
+      })(),
+      fim.then(([codigo]) => { throw new Error(`Servidor terminou com código ${codigo}`); }),
+    ]);
+  }
+  let url = await iniciarServidor();
   const req = (rota, { cookie, method = "GET", dados } = {}) => fetch(url + rota, {
     method,
     redirect: "manual",
@@ -88,6 +132,21 @@ test("regras da agenda pela API HTTP", { timeout: 15000 }, async (t) => {
   const data = "2099-01-05";
   const reservar = (cookie, horario) => req("/agendamentos", {
     cookie, method: "POST", dados: { servicoId: 1, data, horario },
+  });
+
+  await t.test("catálogo e expediente preservam os campos e os IDs existentes", async () => {
+    const catalogo = await (await req("/servicos")).json();
+    assert.equal(catalogo[0].duracaoMinutos, 30);
+    const cadastro = await req("/servicos", {
+      cookie: barbeiro, method: "POST", dados: { nome: "Serviço Teste", duracaoMinutos: 25, precoCentavos: 1200 },
+    });
+    assert.equal(cadastro.status, 201);
+    const { servico } = await cadastro.json();
+    assert.ok(servico.id > 3);
+    assert.equal(servico.precoCentavos, 1200);
+    const expediente = await (await req("/expediente", { cookie: barbeiro })).json();
+    assert.equal(expediente.inicioPausa, null);
+    assert.equal((await req("/expediente", { cookie: barbeiro, method: "PUT", dados: expediente })).status, 200);
   });
 
   let dono, outro, reserva;
@@ -189,18 +248,11 @@ test("regras da agenda pela API HTTP", { timeout: 15000 }, async (t) => {
     assert.equal(avisos.length, 2);
   });
   await t.test("comparecimento exige acesso do barbeiro e um atendimento encerrado", async () => {
-    const banco = new DatabaseSync(arquivoBanco);
-    let id;
-    try {
-      const cliente = banco.prepare("SELECT id FROM clientes WHERE telefone = ?").get("11912340001");
-      const reserva = banco.prepare(`
-        INSERT INTO reservas (nome, servico_id, data, inicio, fim, cliente_id, servico_nome)
-        VALUES ('Cliente Um', 1, '2020-01-01', 540, 570, ?, 'Corte de cabelo') RETURNING id
-      `).get(cliente.id);
-      id = reserva.id;
-    } finally {
-      banco.close();
-    }
+    const [cliente] = await consultarBanco("SELECT id FROM clientes WHERE telefone = ?", "11912340001");
+    const [{ id }] = await consultarBanco(`
+      INSERT INTO reservas (nome, servico_id, data, inicio, fim, cliente_id, servico_nome)
+      VALUES ('Cliente Um', 1, '2020-01-01', 540, 570, ?, 'Corte de cabelo') RETURNING id
+    `, cliente.id);
     const comparecimento = (reservaId, cookie, estado) => req(`/agendamentos/${reservaId}/comparecimento`, {
       cookie, method: "PUT", dados: { comparecimento: estado },
     });
@@ -263,16 +315,11 @@ test("regras da agenda pela API HTTP", { timeout: 15000 }, async (t) => {
     const trocar = (link) => enviarFormulario(caminho + "/redefinir", { token: link, senha, confirmacao: senha });
     assert.equal((await trocar(verificar)).status, 400);
     assert.equal((await req(caminho + "/redefinir")).status, 200);
-    const banco = new DatabaseSync(arquivoBanco);
-    try {
-      const alterarValidade = banco.prepare("UPDATE links_cliente SET expira_em = ? WHERE tipo = 'recuperacao'");
-      const { expira_em } = banco.prepare("SELECT expira_em FROM links_cliente WHERE tipo = 'recuperacao'").get();
-      alterarValidade.run(Date.now() - 1);
-      assert.equal((await trocar(token)).status, 400);
-      alterarValidade.run(expira_em);
-    } finally {
-      banco.close();
-    }
+    const atualizarValidade = "UPDATE links_cliente SET expira_em = ? WHERE tipo = 'recuperacao'";
+    const [{ expira_em }] = await consultarBanco("SELECT expira_em FROM links_cliente WHERE tipo = 'recuperacao'");
+    await consultarBanco(atualizarValidade, Date.now() - 1);
+    assert.equal((await trocar(token)).status, 400);
+    await consultarBanco(atualizarValidade, expira_em);
     const concorrentes = await Promise.all([trocar(token), trocar(token)]);
     assert.deepEqual(concorrentes.map((resposta) => resposta.status).sort(), [200, 400]);
     assert.equal((await trocar(token)).status, 400);
@@ -314,5 +361,21 @@ test("regras da agenda pela API HTTP", { timeout: 15000 }, async (t) => {
     });
     assert.match(confirmar.headers.get("location"), /estado=verificado/);
     assert.equal((await perfil()).email, "novo@example.test");
+  });
+  await t.test("contas, reservas e avisos continuam no banco depois de reiniciar", async () => {
+    servidor.kill();
+    await fim;
+    url = await iniciarServidor();
+    assert.equal(await (await req("/cliente/sessao", { cookie: clienteA })).json(), null);
+    const sessao = await req("/cliente/login", {
+      method: "POST", dados: new URLSearchParams({ telefone: "11912340001", senha: "nova-senha-de-teste" }),
+    });
+    assert.equal(sessao.headers.get("location"), "/");
+    const login = await req("/login", { method: "POST", dados: new URLSearchParams({ senha: "senha-de-teste" }) });
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    const agenda = await (await req(`/agendamentos?data=${data}`, { cookie })).json();
+    assert.deepEqual(agenda.map(({ inicio }) => inicio), [720, 780]);
+    const { avisos } = await (await req("/avisos-whatsapp", { cookie })).json();
+    assert.deepEqual(avisos.map(({ estado }) => estado), ["falha", "aceito"]);
   });
 });

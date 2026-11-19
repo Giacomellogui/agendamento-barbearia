@@ -2,7 +2,7 @@
 
 Sistema de agendamento com uma área para clientes e um painel administrativo
 para o barbeiro. O cadastro de contas, as reservas, o catálogo de serviços e
-o expediente são salvos no SQLite.
+o expediente são salvos no SQLite local ou no PostgreSQL na hospedagem.
 
 ## Funcionalidades
 
@@ -46,7 +46,7 @@ salvar uma reserva. O agendamento e o painel oferecem temas claro e escuro.
 
 ## Tecnologias
 
-TypeScript, HTML, CSS, Node.js e SQLite.
+TypeScript, HTML, CSS, Node.js, SQLite e PostgreSQL.
 
 ## Como rodar
 
@@ -69,6 +69,37 @@ prioridade sobre os valores do arquivo.
 O comando `npm.cmd start` compila o TypeScript do navegador e inicia o servidor.
 O SQLite cria o arquivo local `agenda.sqlite` na pasta do projeto.
 O Git ignora o `.env` e o banco local. O `.env.example` lista as opções de configuração.
+
+## Hospedagem gratuita com Render e Neon
+
+1. Crie um banco PostgreSQL no Neon e copie a URL de conexão com TLS.
+2. No Render, crie um **Web Service** no plano **Free** e conecte a branch
+   `main` do repositório.
+3. Defina o **Build Command** como `npm ci --include=dev && npm run build`
+   e o **Start Command** como `node server.ts`.
+4. No painel do Render, configure:
+
+   | Variável | Valor |
+   | --- | --- |
+   | `DATABASE_URL` | URL de conexão do Neon |
+   | `NODE_VERSION` | `26.13.1` |
+   | `BARBEIRO_SENHA` | Senha escolhida para o painel |
+   | `TZ` | `America/Sao_Paulo` para o expediente em horário de Brasília |
+   | `APP_BASE_URL` | URL HTTPS pública do serviço no Render |
+
+   Para habilitar e-mail ou WhatsApp, adicione ao Render as respectivas
+   variáveis listadas abaixo.
+
+O Render fornece `PORT` e o servidor escuta em `0.0.0.0` na hospedagem.
+Sem `DATABASE_URL`, o projeto usa o SQLite local. Com a URL configurada,
+o esquema do PostgreSQL é criado no primeiro início. Contas e reservas do
+arquivo `agenda.sqlite` exigem uma migração separada.
+
+O Render Free pausa serviços inativos. O primeiro acesso pode demorar, e as
+sessões em memória terminam se o processo for encerrado. As reservas permanecem
+no Neon.
+
+[Render Free](https://render.com/docs/free) · [Plano gratuito do Neon](https://neon.com/blog/neon-free-plan-1-gb-per-project)
 
 ## Fluxos do painel
 
@@ -99,7 +130,7 @@ WHATSAPP_GRAPH_VERSION=v27.0
 
 Informe o número do barbeiro com código do país e DDD, usando apenas dígitos. Se estiver usando um número de teste da Meta, inclua o barbeiro entre os destinatários permitidos.
 
-Quando o cliente reagenda, a mudança é salva antes do envio. Com a integração configurada, os avisos entram numa fila no SQLite e o servidor tenta novamente após uma falha. O texto contém o número da reserva e os horários, sem o nome ou o telefone do cliente. Quando o barbeiro reagenda pelo painel, a mudança aparece na agenda do cliente. Sem as credenciais, o cliente ainda consegue reagendar normalmente.
+Quando o cliente reagenda, a mudança é salva antes do envio. Com a integração configurada, os avisos entram numa fila no banco e o servidor tenta novamente após uma falha. O texto contém o número da reserva e os horários, sem o nome ou o telefone do cliente. Quando o barbeiro reagenda pelo painel, a mudança aparece na agenda do cliente. Sem as credenciais, o cliente ainda consegue reagendar normalmente.
 
 Abra **Avisos do WhatsApp** no painel para consultar a fila e clique em **Atualizar avisos** para conferir novas tentativas. **Aceito pela Meta** significa que a API aceitou a solicitação. A entrega deve ser conferida no celular.
 
@@ -143,12 +174,15 @@ continuam na integração com WhatsApp.
 ## Código do servidor e testes
 
 O `server.ts` inicia o servidor e serve as páginas. Os módulos em `servidor/`
-tratam da autenticação, da agenda, do banco SQLite, das respostas HTTP e dos avisos.
+tratam da autenticação, da agenda, do acesso aos bancos, das respostas HTTP e dos avisos.
 
 Execute `npm.cmd test` para verificar pela API a disputa por horários, o acesso às
 reservas, o reagendamento, o comparecimento, os bloqueios, o estado dos avisos
 e a recuperação de senha.
-A suíte usa um banco temporário e simula as respostas da Meta e do Resend.
+A suíte usa SQLite temporário por padrão e simula as respostas da Meta e do
+Resend. Para executar a mesma suíte no PostgreSQL, defina `TEST_DATABASE_URL`
+com uma conexão de teste que permita criar e remover um esquema temporário e
+execute `npm.cmd test`.
 
 ## Teste manual
 
