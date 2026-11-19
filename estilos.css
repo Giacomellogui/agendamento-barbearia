@@ -840,3 +840,68 @@ button:enabled { cursor: pointer; }
 #mensagem-historico[data-estado="sucesso"] { color: light-dark(#195b32, #b5ebc8); }
 #mensagem-historico[data-estado="erro"],
 #situacao-reagendar[data-estado="erro"] { color: light-dark(#8f2525, #ffd0cc); }
+
+.painel-dia-inteiro {
+  margin-top: 12px;
+}
+
+.campos-formulario .painel-dia-inteiro input {
+  width: 18px;
+  min-height: 18px;
+  vertical-align: middle;
+  accent-color: var(--destaque);
+}
+
+#form-bloqueio .botao-principal { margin-top: 12px; }
+
+.painel-lista-configuracao {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+.painel-lista-configuracao:empty { margin: 0; }
+.painel-lista-configuracao li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--linha);
+  overflow-wrap: anywhere;
+}
+.painel-lista-configuracao small { color: var(--suave); }
+.painel-avisos-acoes { margin-top: 12px; }
+.painel-estado-aviso {
+  border-radius: 6px;
+  padding: 3px 8px;
+  background: var(--cartao);
+  color: var(--destaque);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.painel-estado-aviso[data-estado="aceito"] { color: light-dark(#195b32, #b5ebc8); }
+.painel-estado-aviso[data-estado="falha"] { color: light-dark(#8f2525, #ffd0cc); }
+
+.painel-reserva-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 6px;
+}
+
+.painel-comparecimento {
+  display: grid;
+  gap: 4px;
+  color: var(--suave);
+  font-size: 0.8rem;
+}
+
+.agenda-status[data-estado="Concluído"] { color: light-dark(#195b32, #b5ebc8); }
+.agenda-status[data-estado="Falta"] { color: light-dark(#8f2525, #ffd0cc); }
+
+@media (max-width: 35rem) {
+  .painel-agenda #reservas li { grid-template-columns: minmax(0, 1fr); }
+  .painel-reserva-acoes { justify-content: start; }
+}

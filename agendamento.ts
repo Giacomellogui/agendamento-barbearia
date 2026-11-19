@@ -71,6 +71,7 @@ type ReservaCliente = {
   servico: string;
   cancelada: boolean;
   editavel: boolean;
+  comparecimento: "concluido" | "falta" | null;
 };
 
 function horaFormatada(minutos: number) {
@@ -216,7 +217,10 @@ async function carregarHistorico() {
       const data = new Date(`${reserva.data}T00:00:00`);
       const fim = new Date(data);
       fim.setMinutes(reserva.fim);
-      const estado = reserva.cancelada ? "Cancelado" : fim <= agora ? "Passado" : "Agendado";
+      const estado = reserva.cancelada ? "Cancelado"
+        : reserva.comparecimento === "concluido" ? "Concluído"
+        : reserva.comparecimento === "falta" ? "Falta"
+        : fim <= agora ? "Passado" : "Agendado";
       const item = document.createElement("li");
       const nome = document.createElement("strong");
       nome.textContent = reserva.servico;

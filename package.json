@@ -2,7 +2,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.frontend.json",
-    "start": "npm run build && node server.ts"
+    "test": "npm run build && node --test",
+    "start": "npm run build && node --env-file-if-exists=.env server.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

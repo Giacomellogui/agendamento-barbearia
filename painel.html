@@ -47,6 +47,25 @@
         </section>
         <section class="painel-bloco painel-configuracoes" aria-labelledby="titulo-configuracoes">
           <h2 id="titulo-configuracoes">Configurações</h2>
+          <details class="configuracao-painel">
+            <summary>Bloqueios por data</summary>
+            <form id="form-bloqueio" class="campos-formulario">
+              <fieldset>
+                <legend id="data-bloqueio"></legend>
+                <label class="painel-dia-inteiro">
+                  <input id="bloqueio-dia-inteiro" type="checkbox" /> Dia inteiro
+                </label>
+                <div class="horas-expediente">
+                  <label>Início <input id="bloqueio-inicio" type="time" required /></label>
+                  <label>Fim <input id="bloqueio-fim" type="time" required /></label>
+                </div>
+                <button class="botao-principal" type="submit">Revisar bloqueio</button>
+              </fieldset>
+              <p role="status"></p>
+            </form>
+            <p id="situacao-bloqueios" role="status"></p>
+            <ul id="lista-bloqueios" class="painel-lista-configuracao"></ul>
+          </details>
           <!-- As configurações começam recolhidas. Os campos só são liberados depois de carregar os dados. -->
           <details class="configuracao-painel">
             <summary>Expediente</summary>
@@ -88,9 +107,43 @@
               <p role="status"></p>
             </form>
           </details>
+          <details id="secao-avisos" class="configuracao-painel">
+            <summary>Avisos do WhatsApp</summary>
+            <div class="painel-avisos-acoes">
+              <button id="atualizar-avisos" class="botao-secundario" type="button">Atualizar avisos</button>
+              <p id="situacao-avisos" role="status"></p>
+            </div>
+            <ul id="lista-avisos" class="painel-lista-configuracao"></ul>
+          </details>
         </section>
       </div>
     </main>
+    <dialog id="dialogo-impacto-bloqueio" class="agenda-dialogo" aria-labelledby="titulo-impacto-bloqueio">
+      <h2 id="titulo-impacto-bloqueio">Reservas afetadas</h2>
+      <p>Os atendimentos abaixo continuam marcados. Você pode reagendá-los depois pelo painel.</p>
+      <ul id="lista-impacto-bloqueio" class="painel-lista-configuracao"></ul>
+      <form method="dialog" class="agenda-acoes-reserva">
+        <button class="botao-secundario" value="voltar" autofocus>Voltar</button>
+        <button class="botao-principal" value="confirmar">Salvar bloqueio</button>
+      </form>
+    </dialog>
+    <dialog id="dialogo-reagendar-painel" class="agenda-dialogo" aria-labelledby="titulo-reagendar-painel">
+      <form id="form-reagendar-painel" class="campos-formulario">
+        <h2 id="titulo-reagendar-painel">Reagendar atendimento</h2>
+        <p id="reserva-reagendar-painel"></p>
+        <fieldset>
+          <p><label for="data-reagendar-painel">Nova data</label>
+            <input id="data-reagendar-painel" type="date" required /></p>
+          <p><label for="hora-reagendar-painel">Novo horário</label>
+            <select id="hora-reagendar-painel" required disabled></select></p>
+          <div class="agenda-acoes-reserva">
+            <button id="fechar-reagendamento-painel" class="botao-secundario" type="button">Voltar</button>
+            <button id="salvar-reagendamento-painel" class="botao-principal" type="submit" disabled>Salvar horário</button>
+          </div>
+        </fieldset>
+        <p id="situacao-reagendar-painel" role="status"></p>
+      </form>
+    </dialog>
     <!-- Módulos gerados pela compilação do TypeScript. -->
     <script type="module" src="/tema.js"></script>
     <script type="module" src="/painel.js"></script>
