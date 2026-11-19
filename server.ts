@@ -9,6 +9,14 @@ import { estadoDosAvisos, iniciarAvisos } from "./servidor/whatsapp.ts";
 const pagina = readFileSync(new URL("./index.html", import.meta.url));
 const estilos = readFileSync(new URL("./estilos.css", import.meta.url));
 const fotoBarbearia = readFileSync(new URL("./assets/barbearia.png", import.meta.url));
+const arquivosInstalacao = new Map([
+  ["/app.webmanifest", "application/manifest+json"],
+  ["/assets/app-192.png", "image/png"],
+  ["/assets/app-512.png", "image/png"],
+].map(([caminho, tipo]) => [caminho, {
+  tipo,
+  conteudo: readFileSync(new URL(`.${caminho}`, import.meta.url)),
+}] as const));
 const tema = readFileSync(new URL("./tema.js", import.meta.url));
 const agendamento = readFileSync(new URL("./agendamento.js", import.meta.url));
 const painel = readFileSync(new URL("./painel.html", import.meta.url));
@@ -17,6 +25,13 @@ const scriptPainel = readFileSync(new URL("./painel.js", import.meta.url));
 // Cada rota combina o método HTTP com o caminho pedido pelo navegador.
 async function atender(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  // O Chrome consulta o manifesto e os ícones antes mesmo de o cliente entrar.
+  const arquivoInstalacao = arquivosInstalacao.get(url.pathname);
+  if (arquivoInstalacao && (req.method === "GET" || req.method === "HEAD")) {
+    res.writeHead(200, { "Content-Type": arquivoInstalacao.tipo });
+    res.end(arquivoInstalacao.conteudo);
+    return;
+  }
   if (await atenderAutenticacao(req, res, url) || await atenderAgenda(req, res, url)) return;
   if (req.method === "GET" && url.pathname === "/avisos-whatsapp") {
     res.setHeader("Cache-Control", "no-store");
