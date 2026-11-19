@@ -11,8 +11,11 @@ const estilos = readFileSync(new URL("./estilos.css", import.meta.url));
 const fotoBarbearia = readFileSync(new URL("./assets/barbearia.png", import.meta.url));
 const arquivosInstalacao = new Map([
   ["/app.webmanifest", "application/manifest+json"],
+  ["/barbeiro.webmanifest", "application/manifest+json"],
   ["/assets/app-192.png", "image/png"],
   ["/assets/app-512.png", "image/png"],
+  ["/assets/barbeiro-192.png", "image/png"],
+  ["/assets/barbeiro-512.png", "image/png"],
 ].map(([caminho, tipo]) => [caminho, {
   tipo,
   conteudo: readFileSync(new URL(`.${caminho}`, import.meta.url)),
@@ -25,7 +28,7 @@ const scriptPainel = readFileSync(new URL("./painel.js", import.meta.url));
 // Cada rota combina o método HTTP com o caminho pedido pelo navegador.
 async function atender(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
-  // O Chrome consulta o manifesto e os ícones antes mesmo de o cliente entrar.
+  // Os manifestos e ícones dos dois apps ficam disponíveis antes do login.
   const arquivoInstalacao = arquivosInstalacao.get(url.pathname);
   if (arquivoInstalacao && (req.method === "GET" || req.method === "HEAD")) {
     res.writeHead(200, { "Content-Type": arquivoInstalacao.tipo });
